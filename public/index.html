@@ -31,27 +31,29 @@
             <div class="stat alerta"><div class="num mono">${i.acoes_prazo_vencido_sem_conclusao}</div><div class="label">Ações com prazo vencido</div></div>
           </div>
 
-          <div class="panel">
-            <div class="panel-header">
+          <div class="panel" style="display:flex; flex-direction:column; min-height:0; flex:1; overflow:hidden;">
+            <div class="panel-header" style="flex:none">
               <h2>Por unidade</h2>
               <span class="count">${unidades.length} unidade${unidades.length === 1 ? '' : 's'}</span>
             </div>
             ${unidades.length === 0 ? '<div class="empty-state">Nenhum fato registrado ainda.</div>' : `
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Unidade</th>
-                  <th>Área</th>
-                  <th>Fatos</th>
-                  <th>Conclusão do plano</th>
-                  <th>Atrasadas</th>
-                  <th>Prazo vencido</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${unidades.map(linhaUnidade).join('')}
-              </tbody>
-            </table>`}
+            <div class="panel-lista" style="overflow-x:auto">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Unidade</th>
+                    <th>Área</th>
+                    <th>Fatos</th>
+                    <th>Conclusão do plano</th>
+                    <th>Atrasadas</th>
+                    <th>Prazo vencido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${unidades.map(linhaUnidade).join('')}
+                </tbody>
+              </table>
+            </div>`}
           </div>
         `;
       } catch (err) {

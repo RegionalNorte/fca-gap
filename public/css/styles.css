@@ -58,6 +58,14 @@
 
 * { box-sizing: border-box; }
 
+html {
+  /* telas menores (ex: notebook 14") ficam com tudo grande demais em
+     100% de zoom do navegador — isso deixa o app do tamanho que ficava
+     em 80% de zoom por padrão; quem quiser maior usa o zoom do
+     navegador normalmente a partir daqui */
+  zoom: 80%;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -91,10 +99,16 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 
 /* ---------- shell ---------- */
 
+/* 100% em vez de 100vh por causa do zoom:80% do html — unidade vh não
+   acompanha o zoom (fica relativa ao viewport "real", não ao espaço
+   ampliado que o zoom cria), então a tela ficava cortada. % acompanha
+   certinho porque segue a cadeia normal de layout. */
+#shell { height: 100%; }
+
 .app-shell {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
-  height: 100vh;
+  height: 100%;
   transition: grid-template-columns 0.18s ease;
 }
 
@@ -220,7 +234,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   font-weight: 600;
 }
 
-.user-footer-text { min-width: 0; }
+.user-footer-text { min-width: 0; display: flex; flex-direction: column; }
 .user-footer-text .name {
   font-size: 13px;
   font-weight: 500;
@@ -262,7 +276,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 
 .main {
   min-width: 0;
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -422,6 +436,32 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   overflow-x: auto;
 }
 
+/* qualquer painel de lista (Fatos, Usuários, Áreas, Unidades, Dashboard,
+   Prazos): rola por dentro, cabeçalho da tabela fica fixo no topo em vez
+   de rolar junto com a página. #painel-lista é o id usado pelas telas de
+   CRUD (JS faz getElementById nele); .panel-lista é a versão em classe
+   pras telas com mais de uma tabela na mesma página (ex: prazos.html).
+   Importante: isso precisa estar num elemento SEM border-radius — Chrome
+   tem bug de compositing com sticky dentro de um ancestral que tem
+   border-radius + overflow ao mesmo tempo (a linha que rola por baixo
+   vaza por cima do cabeçalho). Por isso o border-radius/borda fica só no
+   .panel por fora, e quem rola é um filho simples por dentro. */
+#painel-lista,
+.panel-lista {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+#painel-lista table.data-table thead th,
+.panel-lista table.data-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 2;
+  transform: translateZ(0);
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -436,7 +476,12 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 
 table.data-table {
   width: 100%;
-  border-collapse: collapse;
+  /* border-collapse: collapse não combina com thead sticky — em Chrome a
+     linha que passa por baixo do cabeçalho vaza por cima dele em vez de
+     ficar escondida atrás. border-spacing: 0 mantém o visual idêntico já
+     que a tabela só tem bordas inferiores, sem bordas verticais. */
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 table.data-table th {
@@ -455,7 +500,10 @@ table.data-table td {
   vertical-align: middle;
 }
 
-table.data-table tbody tr:last-child td { border-bottom: none; }
+/* borda transparente (não "none") pra manter a altura da linha idêntica
+   às outras — um 1px de diferença aqui é o que faz o cabeçalho sticky
+   vazar a última linha bem no fim do scroll */
+table.data-table tbody tr:last-child td { border-bottom-color: transparent; }
 table.data-table tbody tr:hover { background: var(--paper); }
 table.data-table a.row-link { color: var(--ink); font-weight: 500; }
 table.data-table a.row-link:hover { color: var(--accent); }
@@ -761,8 +809,8 @@ table.data-table a.row-link:hover { color: var(--accent); }
 /* ---------- login ---------- */
 
 .login-page {
-  min-height: 100vh;
-  max-height: 100vh;
+  min-height: 100%;
+  max-height: 100%;
   overflow-y: auto;
   display: flex;
   align-items: center;
@@ -851,4 +899,6 @@ table.data-table a.row-link:hover { color: var(--accent); }
   .acao-card-top { flex-direction: column; align-items: flex-start; gap: 6px; }
 
   table.data-table { min-width: 560px; }
+  #painel-lista,
+  .panel-lista { overflow-x: auto; }
 }

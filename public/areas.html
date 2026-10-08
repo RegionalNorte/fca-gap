@@ -162,7 +162,7 @@
     }
 
     async function iniciar() {
-      content.innerHTML = '<div class="panel" id="painel-lista"></div>';
+      content.innerHTML = '<div class="panel" style="display:flex; flex-direction:column; min-height:0; flex:1; overflow:hidden;"><div id="painel-lista"></div></div>';
       try {
         regionaisCache = await api('/regionais');
       } catch {

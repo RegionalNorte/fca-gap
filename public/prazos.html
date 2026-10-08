@@ -49,17 +49,17 @@
         const { atrasadas, proximos_7_dias, demais } = await api('/acoes/prazos');
 
         content.innerHTML = `
-          <div>
-            <div class="section-label" style="margin-bottom:10px">Atrasadas (${atrasadas.length})</div>
-            <div class="panel">${tabela(atrasadas, 'atraso')}</div>
+          <div style="display:flex; flex-direction:column; min-height:0; flex:1;">
+            <div class="section-label" style="margin-bottom:10px; flex:none">Atrasadas (${atrasadas.length})</div>
+            <div class="panel panel-lista" style="min-height:0;">${tabela(atrasadas, 'atraso')}</div>
           </div>
-          <div>
-            <div class="section-label" style="margin-bottom:10px">Próximos 7 dias (${proximos_7_dias.length})</div>
-            <div class="panel">${tabela(proximos_7_dias)}</div>
+          <div style="display:flex; flex-direction:column; min-height:0; flex:1;">
+            <div class="section-label" style="margin-bottom:10px; flex:none">Próximos 7 dias (${proximos_7_dias.length})</div>
+            <div class="panel panel-lista" style="min-height:0;">${tabela(proximos_7_dias)}</div>
           </div>
-          <div>
-            <div class="section-label" style="margin-bottom:10px">Demais ações em aberto (${demais.length})</div>
-            <div class="panel">${tabela(demais)}</div>
+          <div style="display:flex; flex-direction:column; min-height:0; flex:1;">
+            <div class="section-label" style="margin-bottom:10px; flex:none">Demais ações em aberto (${demais.length})</div>
+            <div class="panel panel-lista" style="min-height:0;">${tabela(demais)}</div>
           </div>
         `;
       } catch (err) {
