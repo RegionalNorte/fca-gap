@@ -60,8 +60,6 @@ const criar = asyncHandler(async (req, res) => {
 });
 
 const atualizar = asyncHandler(async (req, res) => {
-  const { descricao, responsavel_id } = req.body;
-
   if (req.usuario.papel === 'colaborador') {
     const { rows: atual } = await pool.query('SELECT responsavel_id FROM causas WHERE id = $1', [req.params.id]);
     if (!atual[0]) throw new AppError('Causa não encontrada', 404);
@@ -70,13 +68,26 @@ const atualizar = asyncHandler(async (req, res) => {
     }
   }
 
+  // atualização parcial de verdade: campo ausente no corpo = não mexe;
+  // responsavel_id enviado como null = limpa (deixa sem responsável) —
+  // COALESCE trataria os dois casos como "não mude nada" e nunca deixaria
+  // tirar o responsável.
+  const campos = [];
+  const valores = [];
+  if (req.body.descricao !== undefined) {
+    campos.push(`descricao = $${campos.length + 1}`);
+    valores.push(req.body.descricao);
+  }
+  if (req.body.responsavel_id !== undefined) {
+    campos.push(`responsavel_id = $${campos.length + 1}`);
+    valores.push(req.body.responsavel_id);
+  }
+  if (campos.length === 0) throw new AppError('Nada para atualizar', 400);
+  valores.push(req.params.id);
+
   const { rows } = await pool.query(
-    `UPDATE causas SET
-       descricao = COALESCE($1, descricao),
-       responsavel_id = COALESCE($2, responsavel_id)
-     WHERE id = $3
-     RETURNING id`,
-    [descricao ?? null, responsavel_id ?? null, req.params.id]
+    `UPDATE causas SET ${campos.join(', ')} WHERE id = $${valores.length} RETURNING id`,
+    valores
   );
 
   if (!rows[0]) throw new AppError('Causa não encontrada', 404);

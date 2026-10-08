@@ -101,12 +101,87 @@
       return usuariosCache;
     }
 
+    // convite inline usado nos modais de CRIAR causa/ação — ao contrário do
+    // convite de dentro do "Editar" (que manda pra convidar.html e faz um
+    // PATCH numa causa/ação que já existe), aqui a causa/ação ainda não
+    // existe, então só cria/acha o usuário e devolve ele pro chamador
+    // adicionar na seleção local (select ou checklist), sem sair do modal
+    function corpoConvidarInline(prefixo) {
+      return `
+        <p class="hint" id="${prefixo}-convidar-toggle"><a href="#" id="${prefixo}-convidar-abrir">+ Convidar novo responsável</a></p>
+        <div id="${prefixo}-convidar-form" style="display:none; margin-top:8px; padding:12px; border:1px solid var(--border); border-radius:var(--radius-md)">
+          <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap">
+            <div class="field" style="flex:1; min-width:140px; margin:0">
+              <label for="${prefixo}-convidar-nome">Nome</label>
+              <input type="text" id="${prefixo}-convidar-nome" />
+            </div>
+            <div class="field" style="flex:1; min-width:180px; margin:0">
+              <label for="${prefixo}-convidar-email">E-mail</label>
+              <input type="email" id="${prefixo}-convidar-email" />
+            </div>
+          </div>
+          <div style="margin-top:10px; display:flex; gap:14px; align-items:center">
+            <button type="button" class="btn btn--sm btn--primary" id="${prefixo}-convidar-enviar">Adicionar</button>
+            <button type="button" class="link-action" id="${prefixo}-convidar-cancelar-sub">Cancelar</button>
+          </div>
+          <p class="hint" id="${prefixo}-convidar-aviso"></p>
+        </div>
+      `;
+    }
+
+    function ativarConvidarInline(prefixo, aoAdicionar) {
+      const toggle = document.getElementById(`${prefixo}-convidar-toggle`);
+      const form = document.getElementById(`${prefixo}-convidar-form`);
+      const campoNome = document.getElementById(`${prefixo}-convidar-nome`);
+      const campoEmail = document.getElementById(`${prefixo}-convidar-email`);
+      const aviso = document.getElementById(`${prefixo}-convidar-aviso`);
+      const btnEnviar = document.getElementById(`${prefixo}-convidar-enviar`);
+
+      document.getElementById(`${prefixo}-convidar-abrir`).addEventListener('click', (e) => {
+        e.preventDefault();
+        toggle.style.display = 'none';
+        form.style.display = 'block';
+        campoNome.focus();
+      });
+
+      document.getElementById(`${prefixo}-convidar-cancelar-sub`).addEventListener('click', () => {
+        form.style.display = 'none';
+        toggle.style.display = 'block';
+        aviso.textContent = '';
+      });
+
+      btnEnviar.addEventListener('click', async () => {
+        const nome = campoNome.value.trim();
+        const email = campoEmail.value.trim();
+        if (!email) {
+          aviso.textContent = 'Informe o e-mail.';
+          return;
+        }
+        btnEnviar.disabled = true;
+        try {
+          const { usuario, convite_enviado } = await api('/usuarios', { method: 'POST', body: { nome, email } });
+          if (!usuariosCache.some((u) => u.id === usuario.id)) usuariosCache.push(usuario);
+          campoNome.value = '';
+          campoEmail.value = '';
+          form.style.display = 'none';
+          toggle.style.display = 'block';
+          aviso.textContent = '';
+          mostrarToast(convite_enviado ? 'Convite enviado — adicionado aos responsáveis.' : `${usuario.nome || usuario.email} adicionado aos responsáveis.`);
+          aoAdicionar(usuario);
+        } catch (err) {
+          erroApi(err);
+        } finally {
+          btnEnviar.disabled = false;
+        }
+      });
+    }
+
     function corpoModalAcoes(c) {
       return `
         <div class="modal-acoes-list">
           ${c.acoes.length === 0 ? '<div class="empty-state" style="padding:12px 0">Nenhuma ação cadastrada.</div>' : c.acoes.map((a) => acaoCard(a, c.id)).join('')}
         </div>
-        ${podeGerir ? `<a href="/acao.html?causa_id=${c.id}" class="link-action">+ Nova ação</a>` : ''}
+        ${podeGerir ? `<button type="button" class="link-action" onclick="abrirCriarAcaoModal('${c.id}')">+ Nova ação</button>` : ''}
       `;
     }
 
@@ -117,6 +192,55 @@
         titulo: c.descricao,
         meta: `Responsável pela causa: ${escapeHtml(c.responsavel_nome || 'sem responsável')}`,
         corpo: corpoModalAcoes(c),
+      });
+    }
+
+    async function abrirCriarCausaModal() {
+      await carregarUsuariosCache();
+
+      const opcoesResponsavel = (selecionadoId) =>
+        `<option value="">Sem responsável</option>${usuariosCache.map((u) => `<option value="${u.id}" ${u.id === selecionadoId ? 'selected' : ''}>${escapeHtml(u.nome || u.email)}</option>`).join('')}`;
+
+      abrirModal({
+        titulo: 'Nova causa',
+        corpo: `
+          <form id="modal-form-causa" class="form-grid" style="max-width:none">
+            <div class="field">
+              <label for="modal-c-descricao">Descrição</label>
+              <textarea id="modal-c-descricao" required></textarea>
+            </div>
+            <div class="field">
+              <label>Responsável</label>
+              <select id="modal-c-responsavel">${opcoesResponsavel(usuario.id)}</select>
+              <p class="hint">Quem identificou/é o dono da causa — diferente de quem executa as ações. Por padrão fica com quem está criando.</p>
+              ${corpoConvidarInline('modal-c')}
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Criar</button>
+              <button type="button" class="link-action" id="modal-c-cancelar">Cancelar</button>
+            </div>
+          </form>
+        `,
+      });
+
+      document.getElementById('modal-c-cancelar').addEventListener('click', fecharModal);
+
+      ativarConvidarInline('modal-c', (usuarioNovo) => {
+        document.getElementById('modal-c-responsavel').innerHTML = opcoesResponsavel(usuarioNovo.id);
+      });
+
+      document.getElementById('modal-form-causa').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const descricao = document.getElementById('modal-c-descricao').value.trim();
+        const responsavel_id = document.getElementById('modal-c-responsavel').value || null;
+        try {
+          await api('/causas', { method: 'POST', body: { fato_id: fatoId, descricao, responsavel_id } });
+          fecharModal();
+          mostrarToast('Causa criada.');
+          await carregar();
+        } catch (err) {
+          erroApi(err);
+        }
       });
     }
 
@@ -164,7 +288,7 @@
         try {
           await api(`/causas/${causaId}`, { method: 'PATCH', body: { descricao, responsavel_id } });
           fecharModal();
-          carregar();
+          await carregar();
         } catch (err) {
           erroApi(err);
         }
@@ -177,12 +301,96 @@
           try {
             await api(`/causas/${causaId}`, { method: 'DELETE' });
             fecharModal();
-            carregar();
+            await carregar();
           } catch (err) {
             erroApi(err);
           }
         });
       }
+    }
+
+    async function abrirCriarAcaoModal(causaId) {
+      await carregarUsuariosCache();
+
+      // quem está criando já fica marcado como responsável — pode
+      // desmarcar e deixar sem, ou marcar outros também
+      const campoResponsaveis = usuariosCache.length === 0
+        ? '<p class="hint" id="modal-a-sem-usuarios">Nenhum usuário disponível.</p>'
+        : `<div class="checklist" id="modal-a-checklist">${usuariosCache.map((u) => `
+             <label><input type="checkbox" value="${u.id}" ${u.id === usuario.id ? 'checked' : ''}/> ${escapeHtml(u.nome || u.email)}</label>
+           `).join('')}</div>`;
+
+      abrirModal({
+        titulo: 'Nova ação',
+        corpo: `
+          <form id="modal-form-acao" class="form-grid" style="max-width:none">
+            <div class="field">
+              <label for="modal-a-descricao">Descrição</label>
+              <textarea id="modal-a-descricao" required></textarea>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
+              <div class="field">
+                <label for="modal-a-inicio">Início previsto</label>
+                <input type="date" id="modal-a-inicio" required />
+              </div>
+              <div class="field">
+                <label for="modal-a-final">Final previsto</label>
+                <input type="date" id="modal-a-final" required />
+              </div>
+            </div>
+            <div class="field">
+              <label for="modal-a-evidencia">Evidência</label>
+              <textarea id="modal-a-evidencia"></textarea>
+            </div>
+            <div class="field">
+              <label>Responsáveis</label>
+              ${campoResponsaveis}
+              <p class="hint">Por padrão fica com quem está criando — pode desmarcar e deixar sem responsável, ou marcar outros.</p>
+              ${corpoConvidarInline('modal-a')}
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Criar</button>
+              <button type="button" class="link-action" id="modal-a-cancelar">Cancelar</button>
+            </div>
+          </form>
+        `,
+      });
+
+      document.getElementById('modal-a-cancelar').addEventListener('click', () => abrirAcoesModal(causaId));
+
+      ativarConvidarInline('modal-a', (usuarioNovo) => {
+        const semUsuarios = document.getElementById('modal-a-sem-usuarios');
+        let checklist = document.getElementById('modal-a-checklist');
+        if (!checklist) {
+          checklist = document.createElement('div');
+          checklist.className = 'checklist';
+          checklist.id = 'modal-a-checklist';
+          semUsuarios.replaceWith(checklist);
+        }
+        const label = document.createElement('label');
+        label.innerHTML = `<input type="checkbox" value="${usuarioNovo.id}" checked/> ${escapeHtml(usuarioNovo.nome || usuarioNovo.email)}`;
+        checklist.appendChild(label);
+      });
+
+      document.getElementById('modal-form-acao').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {
+          causa_id: causaId,
+          descricao: document.getElementById('modal-a-descricao').value.trim(),
+          inicio_previsto: document.getElementById('modal-a-inicio').value,
+          final_previsto: document.getElementById('modal-a-final').value,
+          evidencia: document.getElementById('modal-a-evidencia').value.trim() || null,
+          responsaveis: Array.from(document.querySelectorAll('#modal-form-acao .checklist input:checked')).map((el) => el.value),
+        };
+        try {
+          await api('/acoes', { method: 'POST', body });
+          mostrarToast('Ação criada.');
+          await carregar();
+          abrirAcoesModal(causaId);
+        } catch (err) {
+          erroApi(err);
+        }
+      });
     }
 
     async function abrirEditarAcaoModal(acaoId, causaId) {
@@ -319,7 +527,7 @@
           <div class="panel panel-causas">
             <div class="panel-header">
               <h2>Causas e ações</h2>
-              ${podeGerir ? `<a href="/causa.html?fato_id=${f.id}" class="link-action">+ Nova causa</a>` : ''}
+              ${podeGerir ? `<button type="button" class="link-action" onclick="abrirCriarCausaModal()">+ Nova causa</button>` : ''}
             </div>
             <div class="panel-causas-body">
               ${f.causas.length === 0
@@ -343,7 +551,7 @@
     async function mudarStatusFato(status) {
       try {
         await api(`/fatos/${fatoId}`, { method: 'PATCH', body: { status } });
-        carregar();
+        await carregar();
       } catch (err) {
         erroApi(err);
       }

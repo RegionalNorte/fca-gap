@@ -92,7 +92,7 @@ const criar = asyncHandler(async (req, res) => {
 // status nunca é aceito no corpo da requisição: é sempre recalculado pelo
 // banco (trigger fn_calcular_status_acao) a partir de data_iniciada/data_finalizada.
 const atualizar = asyncHandler(async (req, res) => {
-  const { descricao, inicio_previsto, final_previsto, data_iniciada, data_finalizada, evidencia, responsaveis } = req.body;
+  const { responsaveis } = req.body;
 
   if (req.usuario.papel === 'colaborador') {
     const { rows: atual } = await pool.query(
@@ -112,26 +112,29 @@ const atualizar = asyncHandler(async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const { rows } = await client.query(
-      `UPDATE acoes SET
-         descricao = COALESCE($1, descricao),
-         inicio_previsto = COALESCE($2, inicio_previsto),
-         final_previsto = COALESCE($3, final_previsto),
-         data_iniciada = COALESCE($4, data_iniciada),
-         data_finalizada = COALESCE($5, data_finalizada),
-         evidencia = COALESCE($6, evidencia)
-       WHERE id = $7
-       RETURNING id`,
-      [
-        descricao ?? null,
-        inicio_previsto ?? null,
-        final_previsto ?? null,
-        data_iniciada ?? null,
-        data_finalizada ?? null,
-        evidencia ?? null,
-        req.params.id,
-      ]
-    );
+    // atualização parcial de verdade: campo ausente no corpo = não mexe;
+    // campo enviado como null = limpa (ex: tirar a data iniciada real,
+    // apagar a evidência) — COALESCE trataria os dois casos como "não
+    // mude nada" e nunca deixaria limpar esses campos.
+    const campos = [];
+    const valores = [];
+    for (const chave of ['descricao', 'inicio_previsto', 'final_previsto', 'data_iniciada', 'data_finalizada', 'evidencia']) {
+      if (req.body[chave] !== undefined) {
+        campos.push(`${chave} = $${campos.length + 1}`);
+        valores.push(req.body[chave]);
+      }
+    }
+
+    let rows;
+    if (campos.length > 0) {
+      valores.push(req.params.id);
+      ({ rows } = await client.query(
+        `UPDATE acoes SET ${campos.join(', ')} WHERE id = $${valores.length} RETURNING id`,
+        valores
+      ));
+    } else {
+      ({ rows } = await client.query('SELECT id FROM acoes WHERE id = $1', [req.params.id]));
+    }
 
     if (!rows[0]) {
       throw new AppError('Ação não encontrada', 404);
