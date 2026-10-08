@@ -45,6 +45,19 @@ const listar = asyncHandler(async (req, res) => {
     throw new AppError('Informe causa_id ou responsavel_id', 400);
   }
 
+  // colaborador só vê as ações de uma causa que não é dele se for
+  // responsável por alguma delas — não as dos colegas
+  if (req.usuario.papel === 'colaborador' && req.query.causa_id) {
+    const { rows: causaRows } = await pool.query('SELECT responsavel_id FROM causas WHERE id = $1', [req.query.causa_id]);
+    const souDonoDaCausa = causaRows[0] && causaRows[0].responsavel_id === req.usuario.id;
+    if (!souDonoDaCausa) {
+      params.push(req.usuario.id);
+      condicoes.push(`EXISTS (
+        SELECT 1 FROM acoes_responsaveis r WHERE r.acao_id = a.id AND r.usuario_id = $${params.length}
+      )`);
+    }
+  }
+
   const { rows } = await pool.query(
     `${SELECT_ACAO} WHERE ${condicoes.join(' AND ')} GROUP BY a.id ORDER BY a.inicio_previsto`,
     params

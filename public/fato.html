@@ -117,11 +117,12 @@
       return usuariosCache;
     }
 
-    // convite inline usado nos modais de CRIAR causa/ação — ao contrário do
-    // convite de dentro do "Editar" (que manda pra convidar.html e faz um
-    // PATCH numa causa/ação que já existe), aqui a causa/ação ainda não
-    // existe, então só cria/acha o usuário e devolve ele pro chamador
-    // adicionar na seleção local (select ou checklist), sem sair do modal
+    // convite inline usado nos modais de criar/editar causa e ação deste
+    // arquivo — fica tudo no mesmo modal (sem navegar pra convidar.html):
+    // só cria/acha o usuário via POST /usuarios e devolve pro chamador
+    // adicionar na seleção local (select ou checklist). O PATCH/POST da
+    // própria causa/ação (que grava esse responsável) é feito depois,
+    // no submit do formulário — igual pra qualquer outro responsável.
     function corpoConvidarInline(prefixo) {
       return `
         <p class="hint" id="${prefixo}-convidar-toggle"><a href="#" id="${prefixo}-convidar-abrir">+ Convidar novo responsável</a></p>
@@ -175,7 +176,12 @@
         }
         btnEnviar.disabled = true;
         try {
-          const { usuario, convite_enviado } = await api('/usuarios', { method: 'POST', body: { nome, email } });
+          // a pessoa convidada daqui herda a unidade do fato — sem isso
+          // ficava sem unidade cadastrada, mesmo sendo colaborador dele
+          const { usuario, convite_enviado } = await api('/usuarios', {
+            method: 'POST',
+            body: { nome, email, unidade_id: fatoCarregado.unidade_id },
+          });
           if (!usuariosCache.some((u) => u.id === usuario.id)) usuariosCache.push(usuario);
           campoNome.value = '';
           campoEmail.value = '';
@@ -268,9 +274,12 @@
       let usuarios = [];
       if (podeGerir) usuarios = await carregarUsuariosCache();
 
+      const opcoesResponsavelEdit = (selecionadoId) =>
+        `<option value="">Sem responsável</option>${usuarios.map((u) => `<option value="${u.id}" ${u.id === selecionadoId ? 'selected' : ''}>${escapeHtml(u.nome || u.email)}</option>`).join('')}`;
+
       const campoResponsavel = podeGerir
-        ? `<select id="modal-c-responsavel"><option value="">Sem responsável</option>${usuarios.map((u) => `<option value="${u.id}" ${u.id === c.responsavel_id ? 'selected' : ''}>${escapeHtml(u.nome || u.email)}</option>`).join('')}</select>
-           <p class="hint"><a href="/convidar.html?retorno_tipo=causa&retorno_id=${causaId}&fato_id=${fatoId}">+ Convidar novo responsável</a></p>`
+        ? `<select id="modal-c-responsavel">${opcoesResponsavelEdit(c.responsavel_id)}</select>
+           ${corpoConvidarInline('modal-c')}`
         : `<div style="padding-top:6px">${c.responsavel_nome ? chipHtml(c.responsavel_nome) : 'Sem responsável'}</div>`;
 
       abrirModal({
@@ -296,6 +305,12 @@
       });
 
       document.getElementById('modal-c-cancelar').addEventListener('click', fecharModal);
+
+      if (podeGerir) {
+        ativarConvidarInline('modal-c', (usuarioNovo) => {
+          document.getElementById('modal-c-responsavel').innerHTML = opcoesResponsavelEdit(usuarioNovo.id);
+        });
+      }
 
       document.getElementById('modal-form-causa').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -425,10 +440,10 @@
 
       const responsaveisAtuais = a.responsaveis_ids || [];
       const campoResponsaveis = podeGerir
-        ? `${usuarios.length === 0 ? '<p class="hint">Nenhum usuário disponível.</p>' : `<div class="checklist">${usuarios.map((u) => `
+        ? `${usuarios.length === 0 ? '<p class="hint" id="modal-a-sem-usuarios">Nenhum usuário disponível.</p>' : `<div class="checklist" id="modal-a-checklist">${usuarios.map((u) => `
              <label><input type="checkbox" value="${u.id}" ${responsaveisAtuais.includes(u.id) ? 'checked' : ''}/> ${escapeHtml(u.nome || u.email)}</label>
            `).join('')}</div>`}
-           <p class="hint"><a href="/convidar.html?retorno_tipo=acao&retorno_id=${acaoId}&fato_id=${fatoId}">+ Convidar novo responsável</a></p>`
+           ${corpoConvidarInline('modal-a')}`
         : chipsResponsaveis(a.responsaveis_nomes);
 
       abrirModal({
@@ -479,6 +494,22 @@
       });
 
       document.getElementById('modal-a-cancelar').addEventListener('click', () => abrirAcoesModal(causaId));
+
+      if (podeGerir) {
+        ativarConvidarInline('modal-a', (usuarioNovo) => {
+          const semUsuarios = document.getElementById('modal-a-sem-usuarios');
+          let checklist = document.getElementById('modal-a-checklist');
+          if (!checklist) {
+            checklist = document.createElement('div');
+            checklist.className = 'checklist';
+            checklist.id = 'modal-a-checklist';
+            semUsuarios.replaceWith(checklist);
+          }
+          const label = document.createElement('label');
+          label.innerHTML = `<input type="checkbox" value="${usuarioNovo.id}" checked/> ${escapeHtml(usuarioNovo.nome || usuarioNovo.email)}`;
+          checklist.appendChild(label);
+        });
+      }
 
       document.getElementById('modal-form-acao').addEventListener('submit', async (e) => {
         e.preventDefault();

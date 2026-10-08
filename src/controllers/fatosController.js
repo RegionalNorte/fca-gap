@@ -103,14 +103,36 @@ const buscarPorId = asyncHandler(async (req, res) => {
     [fato.id]
   );
 
+  let causasVisiveis = causas;
+  let acoesVisiveis = acoes;
+
+  // colaborador só vê o que foi atribuído a ele: causas das quais é
+  // responsável (com todas as ações, já que ele acompanha o plano
+  // inteiro da causa) e causas onde só é responsável por alguma ação
+  // específica (aí só essa ação aparece, não as dos colegas)
+  if (req.usuario.papel === 'colaborador') {
+    const uid = req.usuario.id;
+    const causasDoUsuario = new Set(causas.filter((c) => c.responsavel_id === uid).map((c) => c.id));
+    const acoesDoUsuario = new Set(acoes.filter((a) => (a.responsaveis_ids || []).includes(uid)).map((a) => a.id));
+    const causasComAcaoDoUsuario = new Set(acoes.filter((a) => acoesDoUsuario.has(a.id)).map((a) => a.causa_id));
+    const causasVisiveisIds = new Set([...causasDoUsuario, ...causasComAcaoDoUsuario]);
+
+    if (causasVisiveisIds.size === 0) {
+      throw new AppError('Você não tem acesso a este fato', 403);
+    }
+
+    causasVisiveis = causas.filter((c) => causasVisiveisIds.has(c.id));
+    acoesVisiveis = acoes.filter((a) => causasDoUsuario.has(a.causa_id) || acoesDoUsuario.has(a.id));
+  }
+
   const acoesPorCausa = new Map();
-  for (const acao of acoes) {
+  for (const acao of acoesVisiveis) {
     const lista = acoesPorCausa.get(acao.causa_id) || [];
     lista.push(acao);
     acoesPorCausa.set(acao.causa_id, lista);
   }
 
-  fato.causas = causas.map((causa) => ({ ...causa, acoes: acoesPorCausa.get(causa.id) || [] }));
+  fato.causas = causasVisiveis.map((causa) => ({ ...causa, acoes: acoesPorCausa.get(causa.id) || [] }));
 
   res.json(fato);
 });
