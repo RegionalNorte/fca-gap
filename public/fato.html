@@ -44,6 +44,63 @@
       return n === null || n === undefined ? '' : ` (${n} dia${n === 1 ? '' : 's'})`;
     }
 
+    // nome + e-mail juntos em toda lista de responsável — com poucos
+    // usuários cabe tranquilo, e é o que dá pra buscar por e-mail depois
+    function textoUsuario(u) {
+      return u.nome ? `${u.nome} - ${u.email}` : u.email;
+    }
+
+    // --- campo "Responsável" (select) com busca, usado em causa ---
+
+    function montarOpcoesResponsavel(selecionadoId, termo) {
+      const t = (termo || '').trim().toLowerCase();
+      const lista = !t
+        ? usuariosCache
+        : usuariosCache.filter((u) => u.id === selecionadoId || textoUsuario(u).toLowerCase().includes(t));
+      return `<option value="">Sem responsável</option>${lista.map((u) => `<option value="${u.id}" ${u.id === selecionadoId ? 'selected' : ''}>${escapeHtml(textoUsuario(u))}</option>`).join('')}`;
+    }
+
+    function campoResponsavelComBusca(prefixo) {
+      return `
+        <input type="text" id="${prefixo}-busca" class="busca-usuarios" placeholder="Buscar por nome ou e-mail…" />
+        <select id="${prefixo}-responsavel"></select>
+      `;
+    }
+
+    function ativarBuscaResponsavel(prefixo, selecionadoIdInicial) {
+      const select = document.getElementById(`${prefixo}-responsavel`);
+      const busca = document.getElementById(`${prefixo}-busca`);
+      select.innerHTML = montarOpcoesResponsavel(selecionadoIdInicial, '');
+      busca.addEventListener('input', () => {
+        select.innerHTML = montarOpcoesResponsavel(select.value, busca.value);
+      });
+    }
+
+    // --- campo "Responsáveis" (checklist) com busca, usado em ação ---
+
+    function campoResponsaveisComBusca(prefixo, selecionadosIds) {
+      if (usuariosCache.length === 0) {
+        return `<p class="hint" id="${prefixo}-sem-usuarios">Nenhum usuário disponível.</p>`;
+      }
+      return `
+        <input type="text" id="${prefixo}-busca" class="busca-usuarios" placeholder="Buscar por nome ou e-mail…" />
+        <div class="checklist" id="${prefixo}-checklist">${usuariosCache.map((u) => `
+          <label data-busca="${escapeHtml(textoUsuario(u).toLowerCase())}"><input type="checkbox" value="${u.id}" ${selecionadosIds.includes(u.id) ? 'checked' : ''}/> ${escapeHtml(textoUsuario(u))}</label>
+        `).join('')}</div>
+      `;
+    }
+
+    function ativarBuscaChecklist(prefixo) {
+      const busca = document.getElementById(`${prefixo}-busca`);
+      if (!busca) return;
+      busca.addEventListener('input', () => {
+        const t = busca.value.trim().toLowerCase();
+        document.querySelectorAll(`#${prefixo}-checklist label`).forEach((label) => {
+          label.style.display = !t || label.dataset.busca.includes(t) ? '' : 'none';
+        });
+      });
+    }
+
     function acaoCard(a, causaId) {
       const realizado = a.data_finalizada
         ? `${formatarData(a.data_iniciada)} → ${formatarData(a.data_finalizada)}${textoDias(a.dias_reais)}`
@@ -153,6 +210,7 @@
       const campoEmail = document.getElementById(`${prefixo}-convidar-email`);
       const aviso = document.getElementById(`${prefixo}-convidar-aviso`);
       const btnEnviar = document.getElementById(`${prefixo}-convidar-enviar`);
+      let timerVerificacao = null;
 
       document.getElementById(`${prefixo}-convidar-abrir`).addEventListener('click', (e) => {
         e.preventDefault();
@@ -167,11 +225,33 @@
         aviso.textContent = '';
       });
 
+      // avisa em tempo real se o e-mail já existe na base — a pessoa é
+      // atribuída direto (sem novo convite) em vez de criar duplicado
+      campoEmail.addEventListener('input', () => {
+        clearTimeout(timerVerificacao);
+        const email = campoEmail.value.trim();
+        aviso.textContent = '';
+        if (!email || !email.includes('@')) return;
+
+        timerVerificacao = setTimeout(async () => {
+          try {
+            const { existe, usuario } = await api(`/usuarios/verificar-email?email=${encodeURIComponent(email)}`);
+            aviso.textContent = existe
+              ? `Já cadastrado como ${usuario.nome || usuario.email} — será adicionado direto, sem novo convite.`
+              : 'E-mail novo — um convite será enviado por e-mail.';
+            aviso.style.color = existe ? 'var(--status-em-andamento-fg)' : 'var(--faint)';
+          } catch {
+            // verificação é só um aviso; falha aqui não bloqueia o envio
+          }
+        }, 400);
+      });
+
       btnEnviar.addEventListener('click', async () => {
         const nome = campoNome.value.trim();
         const email = campoEmail.value.trim();
         if (!email) {
           aviso.textContent = 'Informe o e-mail.';
+          aviso.style.color = 'var(--danger)';
           return;
         }
         btnEnviar.disabled = true;
@@ -198,6 +278,29 @@
       });
     }
 
+    // usado depois de convidar inline num modal de ação: se a pessoa já
+    // tinha e-mail cadastrado (e por isso já aparecia na checklist, só
+    // sem marcar), marca a que já existe em vez de duplicar a linha
+    function marcarOuAdicionarChecklistAcao(usuarioNovo) {
+      const existente = document.querySelector(`#modal-a-checklist input[value="${usuarioNovo.id}"]`);
+      if (existente) {
+        existente.checked = true;
+        return;
+      }
+      const semUsuarios = document.getElementById('modal-a-sem-usuarios');
+      let checklist = document.getElementById('modal-a-checklist');
+      if (!checklist) {
+        checklist = document.createElement('div');
+        checklist.className = 'checklist';
+        checklist.id = 'modal-a-checklist';
+        semUsuarios.replaceWith(checklist);
+      }
+      const label = document.createElement('label');
+      label.dataset.busca = textoUsuario(usuarioNovo).toLowerCase();
+      label.innerHTML = `<input type="checkbox" value="${usuarioNovo.id}" checked/> ${escapeHtml(textoUsuario(usuarioNovo))}`;
+      checklist.appendChild(label);
+    }
+
     function corpoModalAcoes(c) {
       return `
         <div class="modal-acoes-list">
@@ -221,9 +324,6 @@
     async function abrirCriarCausaModal() {
       await carregarUsuariosCache();
 
-      const opcoesResponsavel = (selecionadoId) =>
-        `<option value="">Sem responsável</option>${usuariosCache.map((u) => `<option value="${u.id}" ${u.id === selecionadoId ? 'selected' : ''}>${escapeHtml(u.nome || u.email)}</option>`).join('')}`;
-
       abrirModal({
         titulo: 'Nova causa',
         corpo: `
@@ -234,7 +334,7 @@
             </div>
             <div class="field">
               <label>Responsável</label>
-              <select id="modal-c-responsavel">${opcoesResponsavel(usuario.id)}</select>
+              ${campoResponsavelComBusca('modal-c')}
               <p class="hint">Quem identificou/é o dono da causa — diferente de quem executa as ações. Por padrão fica com quem está criando.</p>
               ${corpoConvidarInline('modal-c')}
             </div>
@@ -246,10 +346,13 @@
         `,
       });
 
+      ativarBuscaResponsavel('modal-c', usuario.id);
+
       document.getElementById('modal-c-cancelar').addEventListener('click', fecharModal);
 
       ativarConvidarInline('modal-c', (usuarioNovo) => {
-        document.getElementById('modal-c-responsavel').innerHTML = opcoesResponsavel(usuarioNovo.id);
+        document.getElementById('modal-c-busca').value = '';
+        document.getElementById('modal-c-responsavel').innerHTML = montarOpcoesResponsavel(usuarioNovo.id, '');
       });
 
       document.getElementById('modal-form-causa').addEventListener('submit', async (e) => {
@@ -271,14 +374,10 @@
       const c = fatoCarregado.causas.find((x) => x.id === causaId);
       if (!c) return;
 
-      let usuarios = [];
-      if (podeGerir) usuarios = await carregarUsuariosCache();
-
-      const opcoesResponsavelEdit = (selecionadoId) =>
-        `<option value="">Sem responsável</option>${usuarios.map((u) => `<option value="${u.id}" ${u.id === selecionadoId ? 'selected' : ''}>${escapeHtml(u.nome || u.email)}</option>`).join('')}`;
+      if (podeGerir) await carregarUsuariosCache();
 
       const campoResponsavel = podeGerir
-        ? `<select id="modal-c-responsavel">${opcoesResponsavelEdit(c.responsavel_id)}</select>
+        ? `${campoResponsavelComBusca('modal-c')}
            ${corpoConvidarInline('modal-c')}`
         : `<div style="padding-top:6px">${c.responsavel_nome ? chipHtml(c.responsavel_nome) : 'Sem responsável'}</div>`;
 
@@ -307,8 +406,11 @@
       document.getElementById('modal-c-cancelar').addEventListener('click', fecharModal);
 
       if (podeGerir) {
+        ativarBuscaResponsavel('modal-c', c.responsavel_id);
+
         ativarConvidarInline('modal-c', (usuarioNovo) => {
-          document.getElementById('modal-c-responsavel').innerHTML = opcoesResponsavelEdit(usuarioNovo.id);
+          document.getElementById('modal-c-busca').value = '';
+          document.getElementById('modal-c-responsavel').innerHTML = montarOpcoesResponsavel(usuarioNovo.id, '');
         });
       }
 
@@ -346,11 +448,7 @@
 
       // quem está criando já fica marcado como responsável — pode
       // desmarcar e deixar sem, ou marcar outros também
-      const campoResponsaveis = usuariosCache.length === 0
-        ? '<p class="hint" id="modal-a-sem-usuarios">Nenhum usuário disponível.</p>'
-        : `<div class="checklist" id="modal-a-checklist">${usuariosCache.map((u) => `
-             <label><input type="checkbox" value="${u.id}" ${u.id === usuario.id ? 'checked' : ''}/> ${escapeHtml(u.nome || u.email)}</label>
-           `).join('')}</div>`;
+      const campoResponsaveis = campoResponsaveisComBusca('modal-a', [usuario.id]);
 
       abrirModal({
         titulo: 'Nova ação',
@@ -391,18 +489,10 @@
 
       document.getElementById('modal-a-cancelar').addEventListener('click', () => abrirAcoesModal(causaId));
 
+      ativarBuscaChecklist('modal-a');
+
       ativarConvidarInline('modal-a', (usuarioNovo) => {
-        const semUsuarios = document.getElementById('modal-a-sem-usuarios');
-        let checklist = document.getElementById('modal-a-checklist');
-        if (!checklist) {
-          checklist = document.createElement('div');
-          checklist.className = 'checklist';
-          checklist.id = 'modal-a-checklist';
-          semUsuarios.replaceWith(checklist);
-        }
-        const label = document.createElement('label');
-        label.innerHTML = `<input type="checkbox" value="${usuarioNovo.id}" checked/> ${escapeHtml(usuarioNovo.nome || usuarioNovo.email)}`;
-        checklist.appendChild(label);
+        marcarOuAdicionarChecklistAcao(usuarioNovo);
       });
 
       document.getElementById('modal-form-acao').addEventListener('submit', async (e) => {
@@ -435,14 +525,11 @@
         return;
       }
 
-      let usuarios = [];
-      if (podeGerir) usuarios = await carregarUsuariosCache();
+      if (podeGerir) await carregarUsuariosCache();
 
       const responsaveisAtuais = a.responsaveis_ids || [];
       const campoResponsaveis = podeGerir
-        ? `${usuarios.length === 0 ? '<p class="hint" id="modal-a-sem-usuarios">Nenhum usuário disponível.</p>' : `<div class="checklist" id="modal-a-checklist">${usuarios.map((u) => `
-             <label><input type="checkbox" value="${u.id}" ${responsaveisAtuais.includes(u.id) ? 'checked' : ''}/> ${escapeHtml(u.nome || u.email)}</label>
-           `).join('')}</div>`}
+        ? `${campoResponsaveisComBusca('modal-a', responsaveisAtuais)}
            ${corpoConvidarInline('modal-a')}`
         : chipsResponsaveis(a.responsaveis_nomes);
 
@@ -496,18 +583,10 @@
       document.getElementById('modal-a-cancelar').addEventListener('click', () => abrirAcoesModal(causaId));
 
       if (podeGerir) {
+        ativarBuscaChecklist('modal-a');
+
         ativarConvidarInline('modal-a', (usuarioNovo) => {
-          const semUsuarios = document.getElementById('modal-a-sem-usuarios');
-          let checklist = document.getElementById('modal-a-checklist');
-          if (!checklist) {
-            checklist = document.createElement('div');
-            checklist.className = 'checklist';
-            checklist.id = 'modal-a-checklist';
-            semUsuarios.replaceWith(checklist);
-          }
-          const label = document.createElement('label');
-          label.innerHTML = `<input type="checkbox" value="${usuarioNovo.id}" checked/> ${escapeHtml(usuarioNovo.nome || usuarioNovo.email)}`;
-          checklist.appendChild(label);
+          marcarOuAdicionarChecklistAcao(usuarioNovo);
         });
       }
 
