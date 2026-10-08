@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Áreas — FCA GAP</title>
+<link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="shell"></div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    exigirAuth();
+
+    const content = montarLayout({
+      ativo: 'areas',
+      titulo: 'Áreas',
+      breadcrumb: ['Regional Norte', 'Gestão'],
+      acoesHtml: '<button class="btn btn--primary" id="btn-nova-area">Nova área</button>',
+    });
+
+    let regionaisCache = [];
+    let areasCache = [];
+
+    function nomeRegional(id) {
+      const r = regionaisCache.find((x) => x.id === id);
+      return r ? r.nome : '—';
+    }
+
+    function linha(a) {
+      return `
+        <tr>
+          <td style="font-weight:500">${escapeHtml(a.nome)}</td>
+          <td class="cell-muted">${escapeHtml(nomeRegional(a.regional_id))}</td>
+          <td style="text-align:right">
+            <button type="button" class="link-action" onclick="abrirEditarModal('${a.id}')">Editar</button>
+            <button type="button" class="link-action link-action--danger" style="margin-left:14px" onclick="excluir('${a.id}')">Excluir</button>
+          </td>
+        </tr>
+      `;
+    }
+
+    async function carregarLista() {
+      const painel = document.getElementById('painel-lista');
+      painel.innerHTML = '<div class="empty-state">Carregando…</div>';
+      try {
+        areasCache = await api('/areas');
+        painel.innerHTML = areasCache.length === 0
+          ? '<div class="empty-state">Nenhuma área cadastrada ainda.</div>'
+          : `
+            <table class="data-table">
+              <thead><tr><th>Nome</th><th>Regional</th><th></th></tr></thead>
+              <tbody>${areasCache.map(linha).join('')}</tbody>
+            </table>
+          `;
+      } catch (err) {
+        painel.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function selectRegionalHtml(selecionadoId) {
+      return regionaisCache.map((r) => `<option value="${r.id}" ${r.id === selecionadoId ? 'selected' : ''}>${escapeHtml(r.nome)}</option>`).join('');
+    }
+
+    function abrirNovaModal() {
+      abrirModal({
+        titulo: 'Nova área',
+        corpo: `
+          <form id="form-area" class="form-grid" style="max-width:none">
+            <div class="field">
+              <label for="a-regional">Regional</label>
+              <select id="a-regional" required>${selectRegionalHtml(regionaisCache[0] && regionaisCache[0].id)}</select>
+            </div>
+            <div class="field">
+              <label for="a-nome">Nome</label>
+              <input type="text" id="a-nome" required maxlength="150" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Criar</button>
+              <button type="button" class="link-action" id="btn-cancelar">Cancelar</button>
+            </div>
+          </form>
+        `,
+      });
+
+      document.getElementById('btn-cancelar').addEventListener('click', fecharModal);
+      document.getElementById('form-area').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          await api('/areas', {
+            method: 'POST',
+            body: {
+              regional_id: document.getElementById('a-regional').value,
+              nome: document.getElementById('a-nome').value.trim(),
+            },
+          });
+          fecharModal();
+          mostrarToast('Área criada.');
+          carregarLista();
+        } catch (err) {
+          erroApi(err);
+        }
+      });
+    }
+
+    function abrirEditarModal(areaId) {
+      const a = areasCache.find((x) => x.id === areaId);
+      if (!a) return;
+
+      abrirModal({
+        titulo: 'Editar área',
+        corpo: `
+          <form id="form-area" class="form-grid" style="max-width:none">
+            <div class="field">
+              <label for="a-regional">Regional</label>
+              <select id="a-regional" required>${selectRegionalHtml(a.regional_id)}</select>
+            </div>
+            <div class="field">
+              <label for="a-nome">Nome</label>
+              <input type="text" id="a-nome" required maxlength="150" value="${escapeHtml(a.nome)}" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Salvar</button>
+              <button type="button" class="link-action" id="btn-cancelar">Cancelar</button>
+            </div>
+          </form>
+        `,
+      });
+
+      document.getElementById('btn-cancelar').addEventListener('click', fecharModal);
+      document.getElementById('form-area').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          await api(`/areas/${areaId}`, {
+            method: 'PATCH',
+            body: {
+              regional_id: document.getElementById('a-regional').value,
+              nome: document.getElementById('a-nome').value.trim(),
+            },
+          });
+          fecharModal();
+          mostrarToast('Área atualizada.');
+          carregarLista();
+        } catch (err) {
+          erroApi(err);
+        }
+      });
+    }
+
+    async function excluir(areaId) {
+      if (!confirm('Excluir esta área e todas as unidades dentro dela?')) return;
+      try {
+        await api(`/areas/${areaId}`, { method: 'DELETE' });
+        mostrarToast('Área excluída.');
+        carregarLista();
+      } catch (err) {
+        erroApi(err);
+      }
+    }
+
+    async function iniciar() {
+      content.innerHTML = '<div class="panel" id="painel-lista"></div>';
+      try {
+        regionaisCache = await api('/regionais');
+      } catch {
+        regionaisCache = [];
+      }
+      document.getElementById('btn-nova-area').addEventListener('click', abrirNovaModal);
+      carregarLista();
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>

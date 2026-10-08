@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Unidades — FCA GAP</title>
+<link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="shell"></div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    exigirAuth();
+
+    const content = montarLayout({
+      ativo: 'unidades',
+      titulo: 'Unidades',
+      breadcrumb: ['Regional Norte', 'Gestão'],
+      acoesHtml: '<button class="btn btn--primary" id="btn-nova-unidade">Nova unidade</button>',
+    });
+
+    let areasCache = [];
+    let unidadesCache = [];
+
+    function linha(u) {
+      const area = areasCache.find((x) => x.id === u.area_id);
+      return `
+        <tr>
+          <td style="font-weight:500">${escapeHtml(u.nome)}</td>
+          <td class="cell-muted">${escapeHtml(area ? area.nome : '—')}</td>
+          <td class="cell-muted">${escapeHtml(area ? area.regional_nome || '' : '')}</td>
+          <td style="text-align:right">
+            <button type="button" class="link-action" onclick="abrirEditarModal('${u.id}')">Editar</button>
+            <button type="button" class="link-action link-action--danger" style="margin-left:14px" onclick="excluir('${u.id}')">Excluir</button>
+          </td>
+        </tr>
+      `;
+    }
+
+    async function carregarLista() {
+      const painel = document.getElementById('painel-lista');
+      painel.innerHTML = '<div class="empty-state">Carregando…</div>';
+      try {
+        unidadesCache = await api('/unidades');
+        painel.innerHTML = unidadesCache.length === 0
+          ? '<div class="empty-state">Nenhuma unidade cadastrada ainda.</div>'
+          : `
+            <table class="data-table">
+              <thead><tr><th>Nome</th><th>Área</th><th>Regional</th><th></th></tr></thead>
+              <tbody>${unidadesCache.map(linha).join('')}</tbody>
+            </table>
+          `;
+      } catch (err) {
+        painel.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function selectAreaHtml(selecionadoId) {
+      return areasCache.map((a) => `<option value="${a.id}" ${a.id === selecionadoId ? 'selected' : ''}>${escapeHtml(a.nome)}${a.regional_nome ? ' — ' + escapeHtml(a.regional_nome) : ''}</option>`).join('');
+    }
+
+    function abrirNovaModal() {
+      if (areasCache.length === 0) {
+        mostrarToast('Cadastre uma área antes de criar uma unidade.', 'erro');
+        return;
+      }
+
+      abrirModal({
+        titulo: 'Nova unidade',
+        corpo: `
+          <form id="form-unidade" class="form-grid" style="max-width:none">
+            <div class="field">
+              <label for="u-area">Área</label>
+              <select id="u-area" required>${selectAreaHtml(areasCache[0].id)}</select>
+            </div>
+            <div class="field">
+              <label for="u-nome">Nome</label>
+              <input type="text" id="u-nome" required maxlength="150" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Criar</button>
+              <button type="button" class="link-action" id="btn-cancelar">Cancelar</button>
+            </div>
+          </form>
+        `,
+      });
+
+      document.getElementById('btn-cancelar').addEventListener('click', fecharModal);
+      document.getElementById('form-unidade').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          await api('/unidades', {
+            method: 'POST',
+            body: {
+              area_id: document.getElementById('u-area').value,
+              nome: document.getElementById('u-nome').value.trim(),
+            },
+          });
+          fecharModal();
+          mostrarToast('Unidade criada.');
+          carregarLista();
+        } catch (err) {
+          erroApi(err);
+        }
+      });
+    }
+
+    function abrirEditarModal(unidadeId) {
+      const u = unidadesCache.find((x) => x.id === unidadeId);
+      if (!u) return;
+
+      abrirModal({
+        titulo: 'Editar unidade',
+        corpo: `
+          <form id="form-unidade" class="form-grid" style="max-width:none">
+            <div class="field">
+              <label for="u-area">Área</label>
+              <select id="u-area" required>${selectAreaHtml(u.area_id)}</select>
+            </div>
+            <div class="field">
+              <label for="u-nome">Nome</label>
+              <input type="text" id="u-nome" required maxlength="150" value="${escapeHtml(u.nome)}" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Salvar</button>
+              <button type="button" class="link-action" id="btn-cancelar">Cancelar</button>
+            </div>
+          </form>
+        `,
+      });
+
+      document.getElementById('btn-cancelar').addEventListener('click', fecharModal);
+      document.getElementById('form-unidade').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          await api(`/unidades/${unidadeId}`, {
+            method: 'PATCH',
+            body: {
+              area_id: document.getElementById('u-area').value,
+              nome: document.getElementById('u-nome').value.trim(),
+            },
+          });
+          fecharModal();
+          mostrarToast('Unidade atualizada.');
+          carregarLista();
+        } catch (err) {
+          erroApi(err);
+        }
+      });
+    }
+
+    async function excluir(unidadeId) {
+      if (!confirm('Excluir esta unidade? Só é possível se não houver fatos registrados nela.')) return;
+      try {
+        await api(`/unidades/${unidadeId}`, { method: 'DELETE' });
+        mostrarToast('Unidade excluída.');
+        carregarLista();
+      } catch (err) {
+        erroApi(err);
+      }
+    }
+
+    async function iniciar() {
+      content.innerHTML = '<div class="panel" id="painel-lista"></div>';
+      try {
+        const areas = await api('/areas');
+        const regionais = await api('/regionais');
+        const regionalPorId = Object.fromEntries(regionais.map((r) => [r.id, r.nome]));
+        areasCache = areas.map((a) => ({ ...a, regional_nome: regionalPorId[a.regional_id] }));
+      } catch {
+        areasCache = [];
+      }
+      document.getElementById('btn-nova-unidade').addEventListener('click', abrirNovaModal);
+      carregarLista();
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>

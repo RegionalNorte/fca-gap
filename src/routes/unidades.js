@@ -5,8 +5,8 @@ const { permitir } = require('../middlewares/auth');
 
 router.get('/', controller.listar);
 router.get('/:id', controller.buscarPorId);
-router.post('/', permitir('admin', 'gestor_regional', 'gestor_area'), controller.criar);
-router.patch('/:id', permitir('admin', 'gestor_regional', 'gestor_area'), controller.atualizar);
-router.delete('/:id', permitir('admin', 'gestor_regional', 'gestor_area'), controller.remover);
+router.post('/', permitir('admin'), controller.criar);
+router.patch('/:id', permitir('admin'), controller.atualizar);
+router.delete('/:id', permitir('admin'), controller.remover);
 
 module.exports = router;

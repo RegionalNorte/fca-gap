@@ -131,7 +131,8 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 .app-shell.sidebar-collapsed .sidebar-brand-text,
 .app-shell.sidebar-collapsed .nav-label,
 .app-shell.sidebar-collapsed .user-footer-text,
-.app-shell.sidebar-collapsed .sidebar-group-label {
+.app-shell.sidebar-collapsed .sidebar-group-label,
+.app-shell.sidebar-collapsed .sidebar-nav-label {
   display: none;
 }
 
@@ -162,7 +163,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   font-size: 14px;
 }
 
-.nav-item:hover { background: var(--sidebar-hover-bg); text-decoration: none; }
+.nav-item:hover { background: var(--sidebar-hover-bg); color: var(--sidebar-text-active); text-decoration: none; }
 
 .nav-item.active {
   background: var(--sidebar-active-bg);
@@ -171,6 +172,18 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 }
 
 .nav-icon { flex: none; width: 18px; height: 18px; }
+
+.sidebar-nav-label {
+  display: block;
+  margin-top: 10px;
+  padding: 10px 10px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sidebar-faint);
+  border-top: 1px solid var(--sidebar-border);
+}
 
 .sidebar-footer {
   margin-top: auto;
