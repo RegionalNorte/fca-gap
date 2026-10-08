@@ -1,0 +1,25 @@
+{
+  "name": "fca-gap",
+  "version": "0.1.0",
+  "description": "FCA GAP — acompanhamento de fatos, causas e acoes da Regional Norte",
+  "private": true,
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "db:create": "node scripts/db-create.js",
+    "db:schema": "node scripts/db-schema.js",
+    "db:seed": "node scripts/db-seed.js",
+    "db:setup": "npm run db:create && npm run db:schema && npm run db:seed"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.10.0",
+    "pg": "^8.12.0"
+  }
+}

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ação — FCA GAP</title>
+<link rel="stylesheet" href="/css/styles.css" />
+<style>
+  .datas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+</style>
+</head>
+<body>
+  <div id="shell"></div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    exigirAuth();
+    const usuario = getUsuario();
+    const podeGerir = ['admin', 'gestor_regional', 'gestor_area', 'gestor_unidade'].includes(usuario.papel);
+    const acaoId = qs('id');
+    const causaIdNovo = qs('causa_id');
+    const ehNova = !acaoId;
+
+    const content = montarLayout({
+      ativo: 'fatos',
+      titulo: ehNova ? 'Nova ação' : 'Editar ação',
+      breadcrumb: ['Regional Norte', 'Fatos'],
+    });
+
+    let causaIdAtual = causaIdNovo;
+    let fatoIdAtual = null;
+    let usuariosCache = [];
+    let souResponsavel = false;
+
+    async function carregarUsuarios() {
+      try {
+        usuariosCache = await api('/usuarios');
+      } catch {
+        usuariosCache = [];
+      }
+    }
+
+    function checklistResponsaveis(selecionados = []) {
+      if (usuariosCache.length === 0) return '<p class="hint">Nenhum usuário disponível.</p>';
+      return `<div class="checklist">${usuariosCache.map((u) => `
+        <label><input type="checkbox" value="${u.id}" ${selecionados.includes(u.id) ? 'checked' : ''}/> ${escapeHtml(u.nome || u.email)}</label>
+      `).join('')}</div>`;
+    }
+
+    async function montarForm(acao) {
+      const podeEditarResponsaveis = podeGerir;
+      const responsaveisAtuais = acao ? (acao.responsaveis_ids || []) : [];
+
+      const campoResponsaveis = podeEditarResponsaveis
+        ? `${checklistResponsaveis(responsaveisAtuais)}
+           ${!ehNova ? `<p class="hint"><a href="/convidar.html?retorno_tipo=acao&retorno_id=${acaoId}">+ Convidar novo responsável</a></p>` : ''}`
+        : `<div>${chipsResponsaveis(acao ? acao.responsaveis_nomes : null)}</div>`;
+
+      const camposReais = !ehNova ? `
+        <div class="datas-grid">
+          <div class="field">
+            <label for="a-iniciada">Data iniciada (real)</label>
+            <input type="date" id="a-iniciada" value="${acao.data_iniciada ? acao.data_iniciada.slice(0, 10) : ''}" />
+          </div>
+          <div class="field">
+            <label for="a-finalizada">Data finalizada (real)</label>
+            <input type="date" id="a-finalizada" value="${acao.data_finalizada ? acao.data_finalizada.slice(0, 10) : ''}" />
+          </div>
+        </div>
+      ` : '';
+
+      content.innerHTML = `
+        <div class="panel" style="padding:22px; max-width:640px">
+          ${!ehNova ? `<div style="margin-bottom:18px">${statusAcaoHtml(acao.status)} <span style="margin-left:6px; font-size:12px; color:var(--faint)">— calculado automaticamente a partir das datas</span></div>` : ''}
+          <form id="form-acao" class="form-grid">
+            <div class="field">
+              <label for="a-descricao">Descrição</label>
+              <textarea id="a-descricao" required>${acao ? escapeHtml(acao.descricao) : ''}</textarea>
+            </div>
+            <div class="datas-grid">
+              <div class="field">
+                <label for="a-inicio">Início previsto</label>
+                <input type="date" id="a-inicio" required value="${acao && acao.inicio_previsto ? acao.inicio_previsto.slice(0, 10) : ''}" />
+              </div>
+              <div class="field">
+                <label for="a-final">Final previsto</label>
+                <input type="date" id="a-final" required value="${acao && acao.final_previsto ? acao.final_previsto.slice(0, 10) : ''}" />
+              </div>
+            </div>
+            ${camposReais}
+            <div class="field">
+              <label for="a-evidencia">Evidência</label>
+              <textarea id="a-evidencia">${acao && acao.evidencia ? escapeHtml(acao.evidencia) : ''}</textarea>
+            </div>
+            <div class="field">
+              <label>Responsáveis</label>
+              ${campoResponsaveis}
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Salvar</button>
+              <a href="${fatoIdAtual ? `/fato.html?id=${fatoIdAtual}` : '/fatos.html'}" class="link-action">Cancelar</a>
+              ${!ehNova && podeGerir ? `<button type="button" class="link-action link-action--danger" id="btn-excluir" style="margin-left:auto">Excluir ação</button>` : ''}
+            </div>
+          </form>
+        </div>
+      `;
+
+      document.getElementById('form-acao').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const body = {
+          descricao: document.getElementById('a-descricao').value.trim(),
+          inicio_previsto: document.getElementById('a-inicio').value,
+          final_previsto: document.getElementById('a-final').value,
+          evidencia: document.getElementById('a-evidencia').value.trim() || null,
+        };
+
+        if (!ehNova) {
+          body.data_iniciada = document.getElementById('a-iniciada').value || null;
+          body.data_finalizada = document.getElementById('a-finalizada').value || null;
+        }
+
+        if (podeEditarResponsaveis) {
+          body.responsaveis = Array.from(content.querySelectorAll('.checklist input:checked')).map((el) => el.value);
+        }
+
+        try {
+          if (ehNova) {
+            body.causa_id = causaIdAtual;
+            const nova = await api('/acoes', { method: 'POST', body });
+            location.href = `/fato.html?id=${fatoIdAtual}`;
+          } else {
+            await api(`/acoes/${acaoId}`, { method: 'PATCH', body });
+            location.href = `/fato.html?id=${fatoIdAtual}`;
+          }
+        } catch (err) {
+          erroApi(err);
+        }
+      });
+
+      const btnExcluir = document.getElementById('btn-excluir');
+      if (btnExcluir) {
+        btnExcluir.addEventListener('click', async () => {
+          if (!confirm('Excluir esta ação?')) return;
+          try {
+            await api(`/acoes/${acaoId}`, { method: 'DELETE' });
+            location.href = `/fato.html?id=${fatoIdAtual}`;
+          } catch (err) {
+            erroApi(err);
+          }
+        });
+      }
+    }
+
+    async function carregarFatoIdDaCausa(causaId) {
+      const causa = await api(`/causas/${causaId}`);
+      return causa.fato_id;
+    }
+
+    async function iniciar() {
+      content.innerHTML = '<div class="empty-state">Carregando…</div>';
+      if (podeGerir) await carregarUsuarios();
+
+      try {
+        if (ehNova) {
+          fatoIdAtual = await carregarFatoIdDaCausa(causaIdAtual);
+          await montarForm(null);
+        } else {
+          const acao = await api(`/acoes/${acaoId}`);
+          causaIdAtual = acao.causa_id;
+          fatoIdAtual = await carregarFatoIdDaCausa(causaIdAtual);
+          await montarForm(acao);
+        }
+      } catch (err) {
+        content.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>

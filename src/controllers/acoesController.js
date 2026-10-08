@@ -1,0 +1,194 @@
+const pool = require('../db/pool');
+const AppError = require('../utils/AppError');
+const asyncHandler = require('../utils/asyncHandler');
+const { condicaoUnidade } = require('../services/escopo');
+
+const SELECT_ACAO = `
+  SELECT
+    a.*,
+    ARRAY_REMOVE(ARRAY_AGG(u.id ORDER BY u.nome), NULL) AS responsaveis_ids,
+    STRING_AGG(u.nome, ', ' ORDER BY u.nome) AS responsaveis_nomes
+  FROM acoes a
+  LEFT JOIN acoes_responsaveis res ON res.acao_id = a.id
+  LEFT JOIN usuarios u ON u.id = res.usuario_id
+`;
+
+async function substituirResponsaveis(client, acaoId, responsaveis) {
+  await client.query('DELETE FROM acoes_responsaveis WHERE acao_id = $1', [acaoId]);
+
+  if (!Array.isArray(responsaveis) || responsaveis.length === 0) return;
+
+  const valores = responsaveis.map((_, i) => `($1, $${i + 2})`).join(', ');
+  await client.query(
+    `INSERT INTO acoes_responsaveis (acao_id, usuario_id) VALUES ${valores}`,
+    [acaoId, ...responsaveis]
+  );
+}
+
+const listar = asyncHandler(async (req, res) => {
+  const condicoes = [];
+  const params = [];
+
+  if (req.query.causa_id) {
+    params.push(req.query.causa_id);
+    condicoes.push(`a.causa_id = $${params.length}`);
+  }
+
+  if (req.query.responsavel_id) {
+    params.push(req.query.responsavel_id);
+    condicoes.push(`EXISTS (
+      SELECT 1 FROM acoes_responsaveis r WHERE r.acao_id = a.id AND r.usuario_id = $${params.length}
+    )`);
+  }
+
+  if (condicoes.length === 0) {
+    throw new AppError('Informe causa_id ou responsavel_id', 400);
+  }
+
+  const { rows } = await pool.query(
+    `${SELECT_ACAO} WHERE ${condicoes.join(' AND ')} GROUP BY a.id ORDER BY a.inicio_previsto`,
+    params
+  );
+  res.json(rows);
+});
+
+const buscarPorId = asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(`${SELECT_ACAO} WHERE a.id = $1 GROUP BY a.id`, [req.params.id]);
+  if (!rows[0]) throw new AppError('Ação não encontrada', 404);
+  res.json(rows[0]);
+});
+
+const criar = asyncHandler(async (req, res) => {
+  const { causa_id, descricao, inicio_previsto, final_previsto, evidencia, responsaveis } = req.body;
+
+  if (!causa_id || !descricao || !inicio_previsto || !final_previsto) {
+    throw new AppError('Informe causa_id, descricao, inicio_previsto e final_previsto', 400);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      `INSERT INTO acoes (causa_id, descricao, inicio_previsto, final_previsto, evidencia)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [causa_id, descricao, inicio_previsto, final_previsto, evidencia || null]
+    );
+
+    await substituirResponsaveis(client, rows[0].id, responsaveis);
+    await client.query('COMMIT');
+
+    const { rows: completo } = await pool.query(`${SELECT_ACAO} WHERE a.id = $1 GROUP BY a.id`, [rows[0].id]);
+    res.status(201).json(completo[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+// status nunca é aceito no corpo da requisição: é sempre recalculado pelo
+// banco (trigger fn_calcular_status_acao) a partir de data_iniciada/data_finalizada.
+const atualizar = asyncHandler(async (req, res) => {
+  const { descricao, inicio_previsto, final_previsto, data_iniciada, data_finalizada, evidencia, responsaveis } = req.body;
+
+  if (req.usuario.papel === 'colaborador') {
+    const { rows: atual } = await pool.query(
+      'SELECT 1 FROM acoes_responsaveis WHERE acao_id = $1 AND usuario_id = $2',
+      [req.params.id, req.usuario.id]
+    );
+    if (!atual[0]) {
+      throw new AppError('Você só pode editar ações das quais é responsável', 403);
+    }
+    // colaborador não redefine quem são os responsáveis, só executa a ação
+    if (responsaveis !== undefined) {
+      throw new AppError('Você não pode alterar os responsáveis desta ação', 403);
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      `UPDATE acoes SET
+         descricao = COALESCE($1, descricao),
+         inicio_previsto = COALESCE($2, inicio_previsto),
+         final_previsto = COALESCE($3, final_previsto),
+         data_iniciada = COALESCE($4, data_iniciada),
+         data_finalizada = COALESCE($5, data_finalizada),
+         evidencia = COALESCE($6, evidencia)
+       WHERE id = $7
+       RETURNING id`,
+      [
+        descricao ?? null,
+        inicio_previsto ?? null,
+        final_previsto ?? null,
+        data_iniciada ?? null,
+        data_finalizada ?? null,
+        evidencia ?? null,
+        req.params.id,
+      ]
+    );
+
+    if (!rows[0]) {
+      throw new AppError('Ação não encontrada', 404);
+    }
+
+    if (responsaveis !== undefined) {
+      await substituirResponsaveis(client, rows[0].id, responsaveis);
+    }
+
+    await client.query('COMMIT');
+
+    const { rows: completo } = await pool.query(`${SELECT_ACAO} WHERE a.id = $1 GROUP BY a.id`, [rows[0].id]);
+    res.json(completo[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+const remover = asyncHandler(async (req, res) => {
+  const { rowCount } = await pool.query('DELETE FROM acoes WHERE id = $1', [req.params.id]);
+  if (!rowCount) throw new AppError('Ação não encontrada', 404);
+  res.status(204).send();
+});
+
+// Painel de prazos: ações ainda em aberto (não finalizadas), agrupadas
+// por urgência. "atrasada" como status (concluída fora do prazo) não
+// entra aqui — isso é sobre ações que ainda não acabaram.
+const prazos = asyncHandler(async (req, res) => {
+  const params = [];
+  let condicao;
+
+  if (req.usuario.papel === 'colaborador') {
+    params.push(req.usuario.id);
+    condicao = `$${params.length} = ANY(v.responsaveis_ids)`;
+  } else {
+    condicao = await condicaoUnidade(req.usuario, 'v.unidade_id', params);
+  }
+
+  const { rows } = await pool.query(
+    `SELECT * FROM vw_acoes_detalhadas v
+     WHERE ${condicao} AND v.status IN ('nao_iniciada', 'em_andamento')
+     ORDER BY v.final_previsto`,
+    params
+  );
+
+  const atrasadas = rows.filter((a) => a.prazo_vencido_sem_conclusao);
+  const proximos_7_dias = rows.filter(
+    (a) => !a.prazo_vencido_sem_conclusao && a.dias_para_vencer >= 0 && a.dias_para_vencer <= 7
+  );
+  const demais = rows.filter(
+    (a) => !atrasadas.includes(a) && !proximos_7_dias.includes(a)
+  );
+
+  res.json({ atrasadas, proximos_7_dias, demais });
+});
+
+module.exports = { listar, buscarPorId, criar, atualizar, remover, prazos };

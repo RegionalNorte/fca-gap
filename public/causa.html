@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Causa — FCA GAP</title>
+<link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="shell"></div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    exigirAuth();
+    const usuario = getUsuario();
+    const podeGerir = ['admin', 'gestor_regional', 'gestor_area', 'gestor_unidade'].includes(usuario.papel);
+    const causaId = qs('id');
+    const fatoIdNovo = qs('fato_id');
+    const ehNova = !causaId;
+
+    const content = montarLayout({
+      ativo: 'fatos',
+      titulo: ehNova ? 'Nova causa' : 'Editar causa',
+      breadcrumb: ['Regional Norte', 'Fatos'],
+    });
+
+    let fatoIdAtual = fatoIdNovo;
+    let usuariosCache = [];
+
+    async function carregarUsuarios() {
+      try {
+        usuariosCache = await api('/usuarios');
+      } catch {
+        usuariosCache = [];
+      }
+    }
+
+    function selectResponsavel(selecionadoId) {
+      const opcoes = usuariosCache.map(
+        (u) => `<option value="${u.id}" ${u.id === selecionadoId ? 'selected' : ''}>${escapeHtml(u.nome || u.email)}</option>`
+      ).join('');
+      return `<option value="">Sem responsável</option>${opcoes}`;
+    }
+
+    function linhaAcaoResumo(a) {
+      return `
+        <div class="acao-card">
+          <div class="acao-card-top">
+            <a href="/acao.html?id=${a.id}" class="descricao" style="color:var(--ink)">${escapeHtml(a.descricao)}</a>
+            ${statusAcaoHtml(a.status)}
+          </div>
+          <div class="datas">previsto ${formatarData(a.inicio_previsto)} → ${formatarData(a.final_previsto)}</div>
+        </div>
+      `;
+    }
+
+    async function montarForm(causa) {
+      const podeEditarResponsavel = podeGerir || !causa;
+      const campoResponsavel = podeEditarResponsavel
+        ? `<select id="c-responsavel">${selectResponsavel(causa ? causa.responsavel_id : null)}</select>
+           ${!ehNova ? `<p class="hint"><a href="/convidar.html?retorno_tipo=causa&retorno_id=${causaId}">+ Convidar novo responsável</a></p>` : ''}`
+        : `<p style="padding-top:8px">${causa.responsavel_nome ? chipHtml(causa.responsavel_nome) : 'Sem responsável'}</p>`;
+
+      content.innerHTML = `
+        <div class="panel" style="padding:22px; max-width:640px">
+          <form id="form-causa" class="form-grid">
+            <div class="field">
+              <label for="c-descricao">Descrição</label>
+              <textarea id="c-descricao" required>${causa ? escapeHtml(causa.descricao) : ''}</textarea>
+            </div>
+            <div class="field">
+              <label for="c-responsavel">Responsável</label>
+              ${campoResponsavel}
+              <p class="hint">Quem identificou/é o dono da causa — diferente de quem executa as ações.</p>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Salvar</button>
+              <a href="${fatoIdAtual ? `/fato.html?id=${fatoIdAtual}` : '/fatos.html'}" class="link-action">Cancelar</a>
+              ${!ehNova && podeGerir ? `<button type="button" class="link-action link-action--danger" id="btn-excluir" style="margin-left:auto">Excluir causa</button>` : ''}
+            </div>
+          </form>
+        </div>
+
+        ${!ehNova ? `
+        <div>
+          <div class="section-head" style="margin-bottom:10px">
+            <div class="section-label">Ações desta causa</div>
+            ${podeGerir ? `<a href="/acao.html?causa_id=${causaId}" class="link-action">+ Nova ação</a>` : ''}
+          </div>
+          <div class="acoes-thread" style="border-left:none; padding-left:0">
+            ${causa.acoes.length === 0 ? '<div class="panel"><div class="empty-state">Nenhuma ação cadastrada.</div></div>' : causa.acoes.map(linhaAcaoResumo).join('')}
+          </div>
+        </div>` : ''}
+      `;
+
+      document.getElementById('form-causa').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const descricao = document.getElementById('c-descricao').value.trim();
+        const responsavelEl = document.getElementById('c-responsavel');
+        const responsavel_id = responsavelEl ? (responsavelEl.value || null) : undefined;
+
+        try {
+          if (ehNova) {
+            const nova = await api('/causas', { method: 'POST', body: { fato_id: fatoIdAtual, descricao, responsavel_id } });
+            location.href = `/fato.html?id=${fatoIdAtual}`;
+          } else {
+            await api(`/causas/${causaId}`, { method: 'PATCH', body: { descricao, responsavel_id } });
+            location.href = `/fato.html?id=${fatoIdAtual}`;
+          }
+        } catch (err) {
+          erroApi(err);
+        }
+      });
+
+      const btnExcluir = document.getElementById('btn-excluir');
+      if (btnExcluir) {
+        btnExcluir.addEventListener('click', async () => {
+          if (!confirm('Excluir esta causa e todas as suas ações?')) return;
+          try {
+            await api(`/causas/${causaId}`, { method: 'DELETE' });
+            location.href = `/fato.html?id=${fatoIdAtual}`;
+          } catch (err) {
+            erroApi(err);
+          }
+        });
+      }
+    }
+
+    async function iniciar() {
+      content.innerHTML = '<div class="empty-state">Carregando…</div>';
+      if (podeGerir) await carregarUsuarios();
+
+      if (ehNova) {
+        await montarForm(null);
+      } else {
+        try {
+          const causa = await api(`/causas/${causaId}`);
+          fatoIdAtual = causa.fato_id;
+          await montarForm(causa);
+        } catch (err) {
+          content.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+        }
+      }
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Entrar — FCA GAP</title>
+<link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-box">
+      <div class="brand">
+        <div class="name">FCA GAP</div>
+        <div class="sub">Entre com seu e-mail e senha</div>
+      </div>
+
+      <div class="login-card">
+        <form id="form-login" class="form-grid" novalidate>
+          <div class="field">
+            <label for="email">E-mail</label>
+            <input type="email" id="email" name="email" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="senha">Senha</label>
+            <input type="password" id="senha" name="senha" autocomplete="current-password" required />
+          </div>
+          <div class="field" id="campo-erro" style="display:none">
+            <p class="error-msg" id="texto-erro"></p>
+          </div>
+          <button type="submit" class="btn btn--primary" id="btn-entrar" style="width:100%; justify-content:center">Entrar</button>
+        </form>
+      </div>
+
+      <div class="login-foot">Primeiro acesso? Use o link de convite enviado por e-mail.</div>
+      <div class="login-foot-small">Não tem acesso ainda? Peça um convite ao seu gestor.</div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script>
+    if (getToken()) location.href = '/index.html';
+
+    document.getElementById('form-login').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const senha = document.getElementById('senha').value;
+      const btn = document.getElementById('btn-entrar');
+      const campoErro = document.getElementById('campo-erro');
+      campoErro.style.display = 'none';
+
+      btn.disabled = true;
+      btn.textContent = 'Entrando…';
+
+      try {
+        const { token, usuario } = await api('/auth/login', { method: 'POST', body: { email, senha } });
+        setSessao(token, usuario);
+        location.href = '/index.html';
+      } catch (err) {
+        document.getElementById('texto-erro').textContent = err.message;
+        campoErro.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Entrar';
+      }
+    });
+  </script>
+</body>
+</html>

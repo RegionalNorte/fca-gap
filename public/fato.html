@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fato — FCA GAP</title>
+<link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="shell"></div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    exigirAuth();
+    const usuario = getUsuario();
+    const podeGerir = ['admin', 'gestor_regional', 'gestor_area', 'gestor_unidade'].includes(usuario.papel);
+    const fatoId = qs('id');
+
+    const content = montarLayout({ ativo: 'fatos', titulo: 'Carregando…', breadcrumb: ['Regional Norte', 'Fatos'] });
+
+    function resumoFatoLinha(f) {
+      const detalhes = [
+        f.acoes_concluidas_com_atraso > 0 ? `<span style="color:var(--status-atrasada-fg)">${f.acoes_concluidas_com_atraso} com atraso</span>` : '',
+        f.acoes_prazo_vencido_sem_conclusao > 0 ? `<span style="color:var(--warning)">${f.acoes_prazo_vencido_sem_conclusao} vencidas</span>` : '',
+      ].filter(Boolean).join(' · ');
+
+      return `
+        <div class="panel fato-resumo">
+          ${statusFatoHtml(f.status)}
+          <span class="fato-resumo-descricao" title="${escapeHtml(f.descricao || '')}">${f.descricao ? escapeHtml(f.descricao) : 'Sem descrição'}</span>
+          <div class="fato-resumo-progresso">
+            <div class="progress-track" style="width:90px; height:6px"><div class="progress-fill" style="width:${f.percentual_conclusao || 0}%"></div></div>
+            <span style="font-size:13px; font-weight:600; white-space:nowrap">${Number(f.percentual_conclusao || 0).toFixed(0)}% · ${f.total_acoes} ações</span>
+          </div>
+          ${detalhes ? `<span style="font-size:12.5px; white-space:nowrap; flex:none">${detalhes}</span>` : ''}
+          <span style="font-size:12.5px; color:var(--faint); white-space:nowrap; flex:none">${formatarData(f.data_identificacao)}</span>
+        </div>
+      `;
+    }
+
+    function acaoCard(a, causaId) {
+      const datas = a.data_finalizada
+        ? `iniciada ${formatarData(a.data_iniciada)} · finalizada ${formatarData(a.data_finalizada)}`
+        : a.data_iniciada
+          ? `iniciada em ${formatarData(a.data_iniciada)} · ainda não finalizada`
+          : 'ainda não iniciada';
+
+      return `
+        <div class="acao-card">
+          <div class="acao-card-top">
+            <div class="descricao">${escapeHtml(a.descricao)}</div>
+            <div class="acao-card-actions">
+              <button type="button" class="link-action" onclick="abrirEditarAcaoModal('${a.id}', '${causaId}')">Editar</button>
+              ${statusAcaoHtml(a.status)}
+            </div>
+          </div>
+          ${a.responsaveis_nomes ? chipsResponsaveis(a.responsaveis_nomes) : ''}
+          <div class="datas">previsto ${formatarData(a.inicio_previsto)} → ${formatarData(a.final_previsto)} · ${datas}</div>
+          ${a.prazo_vencido_sem_conclusao || (a.status === 'nao_iniciada' || a.status === 'em_andamento') && new Date(a.final_previsto) < new Date()
+            ? '<div class="alerta-vencido">Prazo vencido sem conclusão</div>'
+            : ''}
+        </div>
+      `;
+    }
+
+    function blocoCausa(c) {
+      const responsavel = c.responsavel_nome ? chipHtml(c.responsavel_nome) : '<span style="color:var(--faint); font-size:13px">Sem responsável</span>';
+      const podeEditarCausa = podeGerir || c.responsavel_id === usuario.id;
+      const n = c.acoes.length;
+      return `
+        <div class="causa-block" data-causa="${c.id}">
+          <div class="causa-header">
+            <div>
+              <div class="descricao">${escapeHtml(c.descricao)}</div>
+              <div class="meta">Responsável pela causa: ${responsavel}</div>
+            </div>
+            <div class="causa-header-actions">
+              ${podeEditarCausa ? `<button type="button" class="link-action" onclick="abrirEditarCausaModal('${c.id}')">Editar</button>` : ''}
+              <button type="button" class="link-action" onclick="abrirAcoesModal('${c.id}')">Ver ações (${n})</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // guarda o fato carregado pra achar causa/ação na hora de abrir os
+    // modais, sem precisar buscar de novo na API
+    let fatoCarregado = null;
+    // usuários pro select/checklist de responsável, carregado uma vez só
+    let usuariosCache = null;
+
+    async function carregarUsuariosCache() {
+      if (usuariosCache) return usuariosCache;
+      try {
+        usuariosCache = await api('/usuarios');
+      } catch {
+        usuariosCache = [];
+      }
+      return usuariosCache;
+    }
+
+    function corpoModalAcoes(c) {
+      return `
+        <div class="modal-acoes-list">
+          ${c.acoes.length === 0 ? '<div class="empty-state" style="padding:12px 0">Nenhuma ação cadastrada.</div>' : c.acoes.map((a) => acaoCard(a, c.id)).join('')}
+        </div>
+        ${podeGerir ? `<a href="/acao.html?causa_id=${c.id}" class="link-action">+ Nova ação</a>` : ''}
+      `;
+    }
+
+    function abrirAcoesModal(causaId) {
+      const c = fatoCarregado.causas.find((x) => x.id === causaId);
+      if (!c) return;
+      abrirModal({
+        titulo: c.descricao,
+        meta: `Responsável pela causa: ${escapeHtml(c.responsavel_nome || 'sem responsável')}`,
+        corpo: corpoModalAcoes(c),
+      });
+    }
+
+    async function abrirEditarCausaModal(causaId) {
+      const c = fatoCarregado.causas.find((x) => x.id === causaId);
+      if (!c) return;
+
+      let usuarios = [];
+      if (podeGerir) usuarios = await carregarUsuariosCache();
+
+      const campoResponsavel = podeGerir
+        ? `<select id="modal-c-responsavel"><option value="">Sem responsável</option>${usuarios.map((u) => `<option value="${u.id}" ${u.id === c.responsavel_id ? 'selected' : ''}>${escapeHtml(u.nome || u.email)}</option>`).join('')}</select>
+           <p class="hint"><a href="/convidar.html?retorno_tipo=causa&retorno_id=${causaId}">+ Convidar novo responsável</a></p>`
+        : `<div style="padding-top:6px">${c.responsavel_nome ? chipHtml(c.responsavel_nome) : 'Sem responsável'}</div>`;
+
+      abrirModal({
+        titulo: 'Editar causa',
+        corpo: `
+          <form id="modal-form-causa" class="form-grid" style="max-width:none">
+            <div class="field">
+              <label for="modal-c-descricao">Descrição</label>
+              <textarea id="modal-c-descricao" required>${escapeHtml(c.descricao)}</textarea>
+            </div>
+            <div class="field">
+              <label>Responsável</label>
+              ${campoResponsavel}
+              <p class="hint">Quem identificou/é o dono da causa — diferente de quem executa as ações.</p>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Salvar</button>
+              <button type="button" class="link-action" id="modal-c-cancelar">Cancelar</button>
+              ${podeGerir ? `<button type="button" class="link-action link-action--danger" id="modal-c-excluir" style="margin-left:auto">Excluir causa</button>` : ''}
+            </div>
+          </form>
+        `,
+      });
+
+      document.getElementById('modal-c-cancelar').addEventListener('click', fecharModal);
+
+      document.getElementById('modal-form-causa').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const descricao = document.getElementById('modal-c-descricao').value.trim();
+        const respEl = document.getElementById('modal-c-responsavel');
+        const responsavel_id = respEl ? (respEl.value || null) : undefined;
+        try {
+          await api(`/causas/${causaId}`, { method: 'PATCH', body: { descricao, responsavel_id } });
+          fecharModal();
+          carregar();
+        } catch (err) {
+          erroApi(err);
+        }
+      });
+
+      const btnExcluir = document.getElementById('modal-c-excluir');
+      if (btnExcluir) {
+        btnExcluir.addEventListener('click', async () => {
+          if (!confirm('Excluir esta causa e todas as suas ações?')) return;
+          try {
+            await api(`/causas/${causaId}`, { method: 'DELETE' });
+            fecharModal();
+            carregar();
+          } catch (err) {
+            erroApi(err);
+          }
+        });
+      }
+    }
+
+    async function abrirEditarAcaoModal(acaoId, causaId) {
+      let a;
+      try {
+        a = await api(`/acoes/${acaoId}`);
+      } catch (err) {
+        erroApi(err);
+        return;
+      }
+
+      let usuarios = [];
+      if (podeGerir) usuarios = await carregarUsuariosCache();
+
+      const responsaveisAtuais = a.responsaveis_ids || [];
+      const campoResponsaveis = podeGerir
+        ? `${usuarios.length === 0 ? '<p class="hint">Nenhum usuário disponível.</p>' : `<div class="checklist">${usuarios.map((u) => `
+             <label><input type="checkbox" value="${u.id}" ${responsaveisAtuais.includes(u.id) ? 'checked' : ''}/> ${escapeHtml(u.nome || u.email)}</label>
+           `).join('')}</div>`}
+           <p class="hint"><a href="/convidar.html?retorno_tipo=acao&retorno_id=${acaoId}">+ Convidar novo responsável</a></p>`
+        : chipsResponsaveis(a.responsaveis_nomes);
+
+      abrirModal({
+        titulo: 'Editar ação',
+        corpo: `
+          <div>${statusAcaoHtml(a.status)} <span style="font-size:12px; color:var(--faint); margin-left:6px">— calculado automaticamente a partir das datas</span></div>
+          <form id="modal-form-acao" class="form-grid" style="max-width:none">
+            <div class="field">
+              <label for="modal-a-descricao">Descrição</label>
+              <textarea id="modal-a-descricao" required>${escapeHtml(a.descricao)}</textarea>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
+              <div class="field">
+                <label for="modal-a-inicio">Início previsto</label>
+                <input type="date" id="modal-a-inicio" required value="${a.inicio_previsto ? a.inicio_previsto.slice(0, 10) : ''}" />
+              </div>
+              <div class="field">
+                <label for="modal-a-final">Final previsto</label>
+                <input type="date" id="modal-a-final" required value="${a.final_previsto ? a.final_previsto.slice(0, 10) : ''}" />
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
+              <div class="field">
+                <label for="modal-a-iniciada">Data iniciada (real)</label>
+                <input type="date" id="modal-a-iniciada" value="${a.data_iniciada ? a.data_iniciada.slice(0, 10) : ''}" />
+              </div>
+              <div class="field">
+                <label for="modal-a-finalizada">Data finalizada (real)</label>
+                <input type="date" id="modal-a-finalizada" value="${a.data_finalizada ? a.data_finalizada.slice(0, 10) : ''}" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="modal-a-evidencia">Evidência</label>
+              <textarea id="modal-a-evidencia">${a.evidencia ? escapeHtml(a.evidencia) : ''}</textarea>
+            </div>
+            <div class="field">
+              <label>Responsáveis</label>
+              ${campoResponsaveis}
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Salvar</button>
+              <button type="button" class="link-action" id="modal-a-cancelar">Cancelar</button>
+              ${podeGerir ? `<button type="button" class="link-action link-action--danger" id="modal-a-excluir" style="margin-left:auto">Excluir ação</button>` : ''}
+            </div>
+          </form>
+        `,
+      });
+
+      document.getElementById('modal-a-cancelar').addEventListener('click', () => abrirAcoesModal(causaId));
+
+      document.getElementById('modal-form-acao').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {
+          descricao: document.getElementById('modal-a-descricao').value.trim(),
+          inicio_previsto: document.getElementById('modal-a-inicio').value,
+          final_previsto: document.getElementById('modal-a-final').value,
+          data_iniciada: document.getElementById('modal-a-iniciada').value || null,
+          data_finalizada: document.getElementById('modal-a-finalizada').value || null,
+          evidencia: document.getElementById('modal-a-evidencia').value.trim() || null,
+        };
+        if (podeGerir) {
+          body.responsaveis = Array.from(document.querySelectorAll('#modal-form-acao .checklist input:checked')).map((el) => el.value);
+        }
+        try {
+          await api(`/acoes/${acaoId}`, { method: 'PATCH', body });
+          await carregar();
+          abrirAcoesModal(causaId);
+        } catch (err) {
+          erroApi(err);
+        }
+      });
+
+      const btnExcluir = document.getElementById('modal-a-excluir');
+      if (btnExcluir) {
+        btnExcluir.addEventListener('click', async () => {
+          if (!confirm('Excluir esta ação?')) return;
+          try {
+            await api(`/acoes/${acaoId}`, { method: 'DELETE' });
+            await carregar();
+            abrirAcoesModal(causaId);
+          } catch (err) {
+            erroApi(err);
+          }
+        });
+      }
+    }
+
+    function acoesStatusFato(f) {
+      if (!podeGerir) return '';
+      if (f.status === 'cancelado') {
+        return `<button type="button" class="link-action" id="btn-reabrir">Reabrir fato</button>`;
+      }
+      return `<button type="button" class="link-action link-action--danger" id="btn-cancelar">Cancelar fato</button>`;
+    }
+
+    async function carregar() {
+      content.innerHTML = '<div class="empty-state">Carregando…</div>';
+      try {
+        const f = await api(`/fatos/${fatoId}`);
+        fatoCarregado = f;
+
+        document.querySelector('.topbar h1').textContent = f.titulo;
+        document.querySelector('.topbar-breadcrumb').innerHTML =
+          ['Regional Norte', escapeHtml(f.area_nome), escapeHtml(f.unidade_nome)].join(' <span class="sep">/</span> ');
+        document.querySelector('.topbar-actions').innerHTML = acoesStatusFato(f);
+
+        content.classList.add('content--fixed');
+
+        content.innerHTML = `
+          <a href="/fatos.html" style="font-size:13px; color:var(--muted)">&larr; Voltar para Fatos</a>
+
+          ${resumoFatoLinha(f)}
+
+          <div class="panel panel-causas">
+            <div class="panel-header">
+              <h2>Causas e ações</h2>
+              ${podeGerir ? `<a href="/causa.html?fato_id=${f.id}" class="link-action">+ Nova causa</a>` : ''}
+            </div>
+            <div class="panel-causas-body">
+              ${f.causas.length === 0
+                ? `<div class="empty-state">Nenhuma causa registrada ainda.${podeGerir ? ' Use "+ Nova causa" acima.' : ''}</div>`
+                : f.causas.map(blocoCausa).join('')}
+            </div>
+          </div>
+        `;
+
+        if (podeGerir) {
+          const btnCancelar = document.getElementById('btn-cancelar');
+          const btnReabrir = document.getElementById('btn-reabrir');
+          if (btnCancelar) btnCancelar.addEventListener('click', () => mudarStatusFato('cancelado'));
+          if (btnReabrir) btnReabrir.addEventListener('click', () => mudarStatusFato('reabrir'));
+        }
+      } catch (err) {
+        content.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function mudarStatusFato(status) {
+      try {
+        await api(`/fatos/${fatoId}`, { method: 'PATCH', body: { status } });
+        carregar();
+      } catch (err) {
+        erroApi(err);
+      }
+    }
+
+    carregar();
+  </script>
+</body>
+</html>

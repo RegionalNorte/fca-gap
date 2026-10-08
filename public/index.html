@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard — FCA GAP</title>
+<link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="shell"></div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    exigirAuth();
+    const content = montarLayout({ ativo: 'dashboard', titulo: 'Dashboard', breadcrumb: ['Regional Norte'] });
+
+    async function carregar() {
+      content.innerHTML = '<div class="empty-state">Carregando…</div>';
+      try {
+        const { indicadores: i, por_unidade: unidades } = await api('/dashboard');
+
+        content.innerHTML = `
+          <div class="stat-row">
+            <div class="stat"><div class="num mono">${i.total_fatos}</div><div class="label">Fatos no total</div></div>
+            <div class="stat"><div class="num mono">${i.fatos_abertos}</div><div class="label">Abertos</div></div>
+            <div class="stat"><div class="num mono">${i.fatos_em_andamento}</div><div class="label">Em andamento</div></div>
+            <div class="stat"><div class="num mono">${i.fatos_concluidos}</div><div class="label">Concluídos</div></div>
+            <div class="stat alerta"><div class="num mono">${i.acoes_atrasadas}</div><div class="label">Ações concluídas com atraso</div></div>
+            <div class="stat alerta"><div class="num mono">${i.acoes_prazo_vencido_sem_conclusao}</div><div class="label">Ações com prazo vencido</div></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h2>Por unidade</h2>
+              <span class="count">${unidades.length} unidade${unidades.length === 1 ? '' : 's'}</span>
+            </div>
+            ${unidades.length === 0 ? '<div class="empty-state">Nenhum fato registrado ainda.</div>' : `
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Unidade</th>
+                  <th>Área</th>
+                  <th>Fatos</th>
+                  <th>Conclusão do plano</th>
+                  <th>Atrasadas</th>
+                  <th>Prazo vencido</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${unidades.map(linhaUnidade).join('')}
+              </tbody>
+            </table>`}
+          </div>
+        `;
+      } catch (err) {
+        content.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function linhaUnidade(u) {
+      const pct = Number(u.percentual_conclusao_medio || 0);
+      return `
+        <tr>
+          <td><a class="row-link" href="/fatos.html?unidade_id=${u.unidade_id}">${escapeHtml(u.unidade_nome)}</a></td>
+          <td>${escapeHtml(u.area_nome)}</td>
+          <td class="mono">${u.total_fatos}</td>
+          <td>
+            <div class="progress-line" style="max-width:220px">
+              <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+              <span class="progress-pct">${pct.toFixed(0)}%</span>
+            </div>
+          </td>
+          <td class="cell-num">${u.acoes_atrasadas}</td>
+          <td class="cell-num">${u.acoes_prazo_vencido_sem_conclusao}</td>
+        </tr>
+      `;
+    }
+
+    carregar();
+  </script>
+</body>
+</html>

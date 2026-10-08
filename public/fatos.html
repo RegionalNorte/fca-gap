@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fatos — FCA GAP</title>
+<link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="shell"></div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    exigirAuth();
+    const usuario = getUsuario();
+    const podeGerir = ['admin', 'gestor_regional', 'gestor_area', 'gestor_unidade'].includes(usuario.papel);
+
+    const content = montarLayout({
+      ativo: 'fatos',
+      titulo: 'Fatos',
+      breadcrumb: ['Regional Norte'],
+      acoesHtml: podeGerir ? '<button class="btn btn--primary" id="btn-novo-fato">Novo fato</button>' : '',
+    });
+
+    let unidadesCache = [];
+
+    function layoutFiltros() {
+      return `
+        <div class="filters">
+          <label>Unidade
+            <select id="f-unidade"><option value="">Todas as unidades</option></select>
+          </label>
+          <label>Status
+            <select id="f-status">
+              <option value="">Todos os status</option>
+              <option value="aberto">Aberto</option>
+              <option value="em_andamento">Em andamento</option>
+              <option value="concluido">Concluído</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </label>
+          <label>Identificado a partir de
+            <input type="date" id="f-de" />
+          </label>
+          <label>Identificado até
+            <input type="date" id="f-ate" />
+          </label>
+        </div>
+        <div id="painel-novo-fato" class="panel" style="display:none; padding:18px 20px">
+          <h2 style="font-size:14px; margin-bottom:12px">Novo fato</h2>
+          <form id="form-novo-fato" class="form-grid" style="max-width:560px">
+            <div class="field">
+              <label for="nf-unidade">Unidade</label>
+              <select id="nf-unidade" required></select>
+            </div>
+            <div class="field">
+              <label for="nf-titulo">Título</label>
+              <input type="text" id="nf-titulo" required maxlength="200" />
+            </div>
+            <div class="field">
+              <label for="nf-descricao">Descrição</label>
+              <textarea id="nf-descricao"></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Criar fato</button>
+              <button type="button" class="btn btn--ghost" id="btn-cancelar-novo-fato">Cancelar</button>
+            </div>
+          </form>
+        </div>
+        <div class="panel" id="painel-lista"></div>
+      `;
+    }
+
+    async function carregarUnidades() {
+      unidadesCache = await api('/unidades');
+      const options = unidadesCache.map((u) => `<option value="${u.id}">${escapeHtml(u.nome)}</option>`).join('');
+      document.getElementById('f-unidade').insertAdjacentHTML('beforeend', options);
+      document.getElementById('nf-unidade').innerHTML = `<option value="">Selecione…</option>${options}`;
+    }
+
+    function linhaFato(f) {
+      return `
+        <tr>
+          <td style="font-weight:500">${escapeHtml(f.titulo)}</td>
+          <td class="cell-muted">${escapeHtml(f.unidade_nome)}</td>
+          <td class="cell-muted">${escapeHtml(f.area_nome)}</td>
+          <td class="cell-muted">${formatarData(f.data_identificacao)}</td>
+          <td>${statusFatoHtml(f.status)}</td>
+          <td><a href="/fato.html?id=${f.id}">Ver detalhes</a></td>
+        </tr>
+      `;
+    }
+
+    async function carregarLista() {
+      const params = new URLSearchParams();
+      const unidade = document.getElementById('f-unidade').value;
+      const status = document.getElementById('f-status').value;
+      const de = document.getElementById('f-de').value;
+      const ate = document.getElementById('f-ate').value;
+      if (unidade) params.set('unidade_id', unidade);
+      if (status) params.set('status', status);
+      if (de) params.set('data_de', de);
+      if (ate) params.set('data_ate', ate);
+
+      const painel = document.getElementById('painel-lista');
+      painel.innerHTML = '<div class="empty-state">Carregando…</div>';
+
+      try {
+        const fatos = await api(`/fatos?${params.toString()}`);
+        painel.innerHTML = fatos.length === 0
+          ? '<div class="empty-state">Nenhum fato encontrado com esses filtros.</div>'
+          : `
+            <table class="data-table">
+              <thead><tr><th>Título</th><th>Unidade</th><th>Área</th><th>Identificado em</th><th>Status</th><th></th></tr></thead>
+              <tbody>${fatos.map(linhaFato).join('')}</tbody>
+            </table>
+          `;
+      } catch (err) {
+        painel.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function iniciar() {
+      content.innerHTML = layoutFiltros();
+
+      const unidadeNaUrl = qs('unidade_id');
+      await carregarUnidades();
+      if (unidadeNaUrl) document.getElementById('f-unidade').value = unidadeNaUrl;
+
+      ['f-unidade', 'f-status', 'f-de', 'f-ate'].forEach((id) =>
+        document.getElementById(id).addEventListener('change', carregarLista)
+      );
+
+      if (podeGerir) {
+        document.getElementById('btn-novo-fato').addEventListener('click', () => {
+          document.getElementById('painel-novo-fato').style.display = 'block';
+        });
+        document.getElementById('btn-cancelar-novo-fato').addEventListener('click', () => {
+          document.getElementById('painel-novo-fato').style.display = 'none';
+        });
+        document.getElementById('form-novo-fato').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          try {
+            const fato = await api('/fatos', {
+              method: 'POST',
+              body: {
+                unidade_id: document.getElementById('nf-unidade').value,
+                titulo: document.getElementById('nf-titulo').value.trim(),
+                descricao: document.getElementById('nf-descricao').value.trim() || undefined,
+              },
+            });
+            location.href = `/fato.html?id=${fato.id}`;
+          } catch (err) {
+            erroApi(err);
+          }
+        });
+      }
+
+      carregarLista();
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>

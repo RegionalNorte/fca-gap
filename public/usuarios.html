@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Usuários — FCA GAP</title>
+<link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div id="shell"></div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    exigirAuth();
+    const content = montarLayout({
+      ativo: 'usuarios',
+      titulo: 'Usuários',
+      breadcrumb: ['Regional Norte'],
+      acoesHtml: '<a href="/convidar.html" class="btn btn--primary">Novo usuário</a>',
+    });
+
+    const ROTULO_PAPEL = {
+      admin: 'Administrador',
+      gestor_regional: 'Gestor regional',
+      gestor_area: 'Gestor de área',
+      gestor_unidade: 'Gestor de unidade',
+      colaborador: 'Colaborador',
+    };
+
+    let unidadesPorId = {};
+
+    function linha(u) {
+      const statusBadge = u.convite_pendente
+        ? '<span class="badge badge--pendente">Convite pendente</span>'
+        : '<span class="badge badge--ativo">Ativo</span>';
+
+      return `
+        <tr>
+          <td>
+            <div style="font-weight:500">${escapeHtml(u.nome || '—')}</div>
+            <div style="font-size:12px; color:var(--faint)">${escapeHtml(u.email)}</div>
+          </td>
+          <td>${ROTULO_PAPEL[u.papel] || u.papel}</td>
+          <td>${u.unidade_id ? escapeHtml(unidadesPorId[u.unidade_id] || '—') : '—'}</td>
+          <td>${statusBadge}</td>
+          <td class="cell-num">${u.causas_atribuidas}</td>
+          <td class="cell-num">${u.acoes_atribuidas}</td>
+        </tr>
+      `;
+    }
+
+    async function carregarLista() {
+      const params = new URLSearchParams();
+      const papel = document.getElementById('f-papel').value;
+      const status = document.getElementById('f-status').value;
+      if (papel) params.set('papel', papel);
+      if (status) params.set('status', status);
+
+      const painel = document.getElementById('painel-lista');
+      painel.innerHTML = '<div class="empty-state">Carregando…</div>';
+
+      try {
+        const usuarios = await api(`/usuarios?${params.toString()}`);
+        painel.innerHTML = usuarios.length === 0
+          ? '<div class="empty-state">Nenhum usuário encontrado.</div>'
+          : `
+            <table class="data-table">
+              <thead><tr><th>Usuário</th><th>Papel</th><th>Unidade</th><th>Status</th><th>Causas</th><th>Ações</th></tr></thead>
+              <tbody>${usuarios.map(linha).join('')}</tbody>
+            </table>
+          `;
+      } catch (err) {
+        painel.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function iniciar() {
+      content.innerHTML = `
+        <div class="filters">
+          <label>Papel
+            <select id="f-papel">
+              <option value="">Todos os papéis</option>
+              <option value="admin">Administrador</option>
+              <option value="gestor_regional">Gestor regional</option>
+              <option value="gestor_area">Gestor de área</option>
+              <option value="gestor_unidade">Gestor de unidade</option>
+              <option value="colaborador">Colaborador</option>
+            </select>
+          </label>
+          <label>Status
+            <select id="f-status">
+              <option value="">Todos os status</option>
+              <option value="convite_pendente">Convite pendente</option>
+              <option value="ativo">Ativo</option>
+            </select>
+          </label>
+        </div>
+        <div class="panel" id="painel-lista"></div>
+      `;
+
+      try {
+        const unidades = await api('/unidades');
+        unidadesPorId = Object.fromEntries(unidades.map((u) => [u.id, u.nome]));
+      } catch {
+        unidadesPorId = {};
+      }
+
+      document.getElementById('f-papel').addEventListener('change', carregarLista);
+      document.getElementById('f-status').addEventListener('change', carregarLista);
+
+      carregarLista();
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>
