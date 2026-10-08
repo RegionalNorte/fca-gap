@@ -23,12 +23,10 @@
 
         content.innerHTML = `
           <div class="stat-row">
-            <div class="stat"><div class="num mono">${i.total_fatos}</div><div class="label">Fatos no total</div></div>
-            <div class="stat"><div class="num mono">${i.fatos_abertos}</div><div class="label">Abertos</div></div>
-            <div class="stat"><div class="num mono">${i.fatos_em_andamento}</div><div class="label">Em andamento</div></div>
-            <div class="stat"><div class="num mono">${i.fatos_concluidos}</div><div class="label">Concluídos</div></div>
-            <div class="stat alerta"><div class="num mono">${i.acoes_atrasadas}</div><div class="label">Ações concluídas com atraso</div></div>
-            <div class="stat alerta"><div class="num mono">${i.acoes_prazo_vencido_sem_conclusao}</div><div class="label">Ações com prazo vencido</div></div>
+            <div class="stat"><div class="num mono">${i.fatos_abertos}</div><div class="label">Fatos abertos</div></div>
+            <div class="stat alerta"><div class="num mono">${i.acoes_atrasadas}</div><div class="label">Ações atrasadas</div></div>
+            <div class="stat"><div class="num mono">${Number(i.percentual_conclusao_geral || 0).toFixed(0)}%</div><div class="label">Conclusão geral</div></div>
+            <div class="stat"><div class="num mono">${i.unidades_monitoradas}</div><div class="label">Unidades monitoradas</div></div>
           </div>
 
           <div class="panel" style="display:flex; flex-direction:column; min-height:0; flex:1; overflow:hidden;">
@@ -43,10 +41,9 @@
                   <tr>
                     <th>Unidade</th>
                     <th>Área</th>
-                    <th>Fatos</th>
-                    <th>Conclusão do plano</th>
-                    <th>Atrasadas</th>
-                    <th>Prazo vencido</th>
+                    <th>Fatos abertos</th>
+                    <th>Ações atrasadas</th>
+                    <th>Conclusão</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -67,15 +64,14 @@
         <tr>
           <td><a class="row-link" href="/fatos.html?unidade_id=${u.unidade_id}">${escapeHtml(u.unidade_nome)}</a></td>
           <td>${escapeHtml(u.area_nome)}</td>
-          <td class="mono">${u.total_fatos}</td>
+          <td class="mono">${u.fatos_abertos}</td>
+          <td class="mono">${u.acoes_atrasadas}</td>
           <td>
             <div class="progress-line" style="max-width:220px">
               <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
               <span class="progress-pct">${pct.toFixed(0)}%</span>
             </div>
           </td>
-          <td class="cell-num">${u.acoes_atrasadas}</td>
-          <td class="cell-num">${u.acoes_prazo_vencido_sem_conclusao}</td>
         </tr>
       `;
     }

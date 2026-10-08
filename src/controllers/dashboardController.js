@@ -15,7 +15,9 @@ const resumo = asyncHandler(async (req, res) => {
        COUNT(*) FILTER (WHERE status_fato = 'cancelado') AS fatos_cancelados,
        COALESCE(SUM(total_acoes), 0) AS total_acoes,
        COALESCE(SUM(acoes_concluidas_com_atraso), 0) AS acoes_atrasadas,
-       COALESCE(SUM(acoes_prazo_vencido_sem_conclusao), 0) AS acoes_prazo_vencido_sem_conclusao
+       COALESCE(SUM(acoes_prazo_vencido_sem_conclusao), 0) AS acoes_prazo_vencido_sem_conclusao,
+       ROUND(AVG(percentual_conclusao), 1) AS percentual_conclusao_geral,
+       COUNT(DISTINCT unidade_id) AS unidades_monitoradas
      FROM vw_plano_fato
      WHERE ${condicao}`,
     params
