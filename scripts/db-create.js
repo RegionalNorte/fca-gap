@@ -10,6 +10,7 @@ async function main() {
     user: process.env.PGUSER,
     password: process.env.PGPASSWORD,
     database: 'postgres',
+    ssl: process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : false,
   });
 
   await client.connect();

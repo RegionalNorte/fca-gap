@@ -16,6 +16,7 @@ async function main() {
     user: process.env.PGUSER,
     password: process.env.PGPASSWORD,
     database: process.env.PGDATABASE,
+    ssl: process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : false,
   });
 
   await client.connect();
