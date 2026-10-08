@@ -721,22 +721,80 @@ table.data-table a.row-link:hover { color: var(--accent); }
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 13px;
 }
 
-.acao-card-top {
+.acao-card .descricao { font-weight: 500; font-size: 14.5px; line-height: 1.4; }
+
+/* status e "Editar" ficam na mesma linha dos chips de responsáveis, lá
+   embaixo do card — o título fica livre em cima pra ocupar quantas
+   linhas precisar, sem empurrar esses botões pro lado */
+.acao-card-resp-row {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
-.acao-card .descricao { font-weight: 500; font-size: 14px; }
-.acao-card .datas { font-size: 13px; color: var(--muted); }
-.acao-card-actions { display: flex; align-items: center; gap: 10px; }
+.acao-card-bottom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
 
-.modal-acoes-list { display: flex; flex-direction: column; gap: 10px; }
+/* previsto x realizado lado a lado — a estrutura em duas colunas é o que
+   deixa claro, de relance, qual data é plano e qual é o que aconteceu */
+.acao-card-datas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 20px;
+}
+
+.acao-card-datas .rotulo {
+  font-size: 11.5px;
+  color: var(--faint);
+  margin-bottom: 3px;
+}
+
+.acao-card-datas .valor { font-size: 13px; color: var(--ink); }
+.acao-card-datas .valor--vazio { color: var(--faint); }
+
+.acao-card-resp .rotulo {
+  font-size: 11.5px;
+  color: var(--faint);
+  margin-bottom: 6px;
+}
+
+.acao-card-alerta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--warning);
+  background: #fdf3e4;
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+}
+
+/* trava por volta de 4 ações de altura — dali pra frente rola por dentro
+   da lista em vez do modal inteiro crescer quase até a tela toda.
+   flex (não flex-shrink:0 do .modal-body > *) pra isso respeitar o
+   espaço que realmente sobra no modal, sem o modal-body rolar junto. */
+.modal-body > .modal-acoes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  flex-shrink: 1;
+  min-height: 0;
+  max-height: 740px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
 
 .checklist { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; max-height: 200px; overflow: auto; }
 .checklist label { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 400; }
@@ -766,6 +824,10 @@ table.data-table a.row-link:hover { color: var(--accent); }
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
+
+/* causa/ação: título e descrições podem ser bem mais longos que um
+   formulário comum, e a lista de ações respira melhor com mais largura */
+.modal-box--lg { max-width: 920px; }
 
 .modal-header {
   display: flex;
@@ -896,7 +958,7 @@ table.data-table a.row-link:hover { color: var(--accent); }
   .modal-backdrop { padding: 0; }
   .modal-box { max-width: none; width: 100%; height: 100%; max-height: 100%; border-radius: 0; }
   .topbar { padding: 18px 18px 0; }
-  .acao-card-top { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .acao-card-datas { grid-template-columns: 1fr; }
 
   table.data-table { min-width: 560px; }
   #painel-lista,

@@ -76,16 +76,18 @@ function erroApi(err) {
   mostrarToast(err.message || 'Erro inesperado', 'erro');
 }
 
-// Modal genérico: abrirModal({ titulo, meta, corpo }) monta o backdrop +
-// caixa; fecha no X, clicando fora ou com Esc. Só um modal por vez.
-function abrirModal({ titulo, meta = '', corpo }) {
+// Modal genérico: abrirModal({ titulo, meta, corpo, largura }) monta o
+// backdrop + caixa; fecha no X, clicando fora ou com Esc. Só um modal por
+// vez. largura: 'lg' pros modais que têm registro com texto mais longo
+// (causa/ação) — o padrão (sem passar nada) continua o tamanho de sempre.
+function abrirModal({ titulo, meta = '', corpo, largura = '' }) {
   fecharModal();
 
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
   backdrop.id = 'modal-backdrop';
   backdrop.innerHTML = `
-    <div class="modal-box" role="dialog" aria-modal="true" aria-label="${escapeHtml(titulo)}">
+    <div class="modal-box ${largura === 'lg' ? 'modal-box--lg' : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(titulo)}">
       <div class="modal-header">
         <div>
           <h2>${escapeHtml(titulo)}</h2>

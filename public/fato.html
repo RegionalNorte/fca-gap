@@ -45,26 +45,38 @@
     }
 
     function acaoCard(a, causaId) {
-      const datas = a.data_finalizada
-        ? `iniciada ${formatarData(a.data_iniciada)} · finalizada ${formatarData(a.data_finalizada)}${textoDias(a.dias_reais)}`
+      const realizado = a.data_finalizada
+        ? `${formatarData(a.data_iniciada)} → ${formatarData(a.data_finalizada)}${textoDias(a.dias_reais)}`
         : a.data_iniciada
-          ? `iniciada em ${formatarData(a.data_iniciada)} · ainda não finalizada`
+          ? `iniciada ${formatarData(a.data_iniciada)} · em andamento`
           : 'ainda não iniciada';
+      const vencida = a.prazo_vencido_sem_conclusao
+        || ((a.status === 'nao_iniciada' || a.status === 'em_andamento') && new Date(a.final_previsto) < new Date());
 
       return `
         <div class="acao-card">
-          <div class="acao-card-top">
-            <div class="descricao">${escapeHtml(a.descricao)}</div>
-            <div class="acao-card-actions">
-              <button type="button" class="link-action" onclick="abrirEditarAcaoModal('${a.id}', '${causaId}')">Editar</button>
-              ${statusAcaoHtml(a.status)}
+          <div class="descricao">${escapeHtml(a.descricao)}</div>
+          ${vencida ? '<div class="acao-card-alerta">Prazo vencido sem conclusão</div>' : ''}
+          <div class="acao-card-datas">
+            <div>
+              <div class="rotulo">Previsto</div>
+              <div class="valor">${formatarData(a.inicio_previsto)} → ${formatarData(a.final_previsto)}${textoDias(a.dias_previsto)}</div>
+            </div>
+            <div>
+              <div class="rotulo">Realizado</div>
+              <div class="valor${a.data_iniciada ? '' : ' valor--vazio'}">${realizado}</div>
             </div>
           </div>
-          ${a.responsaveis_nomes ? chipsResponsaveis(a.responsaveis_nomes) : ''}
-          <div class="datas">previsto ${formatarData(a.inicio_previsto)} → ${formatarData(a.final_previsto)}${textoDias(a.dias_previsto)} · ${datas}</div>
-          ${a.prazo_vencido_sem_conclusao || (a.status === 'nao_iniciada' || a.status === 'em_andamento') && new Date(a.final_previsto) < new Date()
-            ? '<div class="alerta-vencido">Prazo vencido sem conclusão</div>'
-            : ''}
+          <div class="acao-card-resp-row">
+            <div class="acao-card-resp">
+              <div class="rotulo">Responsáveis</div>
+              ${a.responsaveis_nomes ? chipsResponsaveis(a.responsaveis_nomes) : '<span style="color:var(--faint); font-size:13px">Sem responsável</span>'}
+            </div>
+            <div class="acao-card-bottom">
+              ${statusAcaoHtml(a.status)}
+              <button type="button" class="link-action" onclick="abrirEditarAcaoModal('${a.id}', '${causaId}')">Editar</button>
+            </div>
+          </div>
         </div>
       `;
     }
@@ -196,6 +208,7 @@
         titulo: c.descricao,
         meta: `Responsável pela causa: ${escapeHtml(c.responsavel_nome || 'sem responsável')}`,
         corpo: corpoModalAcoes(c),
+        largura: 'lg',
       });
     }
 
@@ -358,6 +371,7 @@
             </div>
           </form>
         `,
+        largura: 'lg',
       });
 
       document.getElementById('modal-a-cancelar').addEventListener('click', () => abrirAcoesModal(causaId));
@@ -461,6 +475,7 @@
             </div>
           </form>
         `,
+        largura: 'lg',
       });
 
       document.getElementById('modal-a-cancelar').addEventListener('click', () => abrirAcoesModal(causaId));
