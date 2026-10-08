@@ -39,7 +39,12 @@
   <script src="/js/api.js"></script>
   <script src="/js/utils.js"></script>
   <script>
-    if (getToken()) location.href = '/index.html';
+    // colaborador não tem dashboard no menu — manda direto pra Fatos
+    function destinoAposLogin(usuario) {
+      return usuario.papel === 'colaborador' ? '/fatos.html' : '/index.html';
+    }
+
+    if (getToken()) location.href = destinoAposLogin(getUsuario());
 
     document.getElementById('form-login').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -55,7 +60,7 @@
       try {
         const { token, usuario } = await api('/auth/login', { method: 'POST', body: { email, senha } });
         setSessao(token, usuario);
-        location.href = '/index.html';
+        location.href = destinoAposLogin(usuario);
       } catch (err) {
         document.getElementById('texto-erro').textContent = err.message;
         campoErro.style.display = 'block';

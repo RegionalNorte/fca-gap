@@ -14,6 +14,14 @@
   <script src="/js/layout.js"></script>
   <script>
     exigirAuth();
+
+    // colaborador não tem dashboard no menu (só vê o que foi atribuído a
+    // ele) — manda direto pra Fatos em vez de cair numa tela sem nada
+    if (getUsuario().papel === 'colaborador') {
+      location.href = '/fatos.html';
+      throw new Error('redirecionando');
+    }
+
     const content = montarLayout({ ativo: 'dashboard', titulo: 'Dashboard', breadcrumb: ['Regional Norte'] });
 
     async function carregar() {
