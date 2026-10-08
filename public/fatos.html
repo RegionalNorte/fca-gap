@@ -48,12 +48,20 @@
             <input type="date" id="f-ate" />
           </label>
         </div>
-        <div id="painel-novo-fato" class="panel" style="display:none; padding:18px 20px">
-          <h2 style="font-size:14px; margin-bottom:12px">Novo fato</h2>
-          <form id="form-novo-fato" class="form-grid" style="max-width:560px">
+        <div class="panel" id="painel-lista"></div>
+      `;
+    }
+
+    function abrirNovoFatoModal() {
+      const options = unidadesCache.map((u) => `<option value="${u.id}">${escapeHtml(u.nome)}</option>`).join('');
+
+      abrirModal({
+        titulo: 'Novo fato',
+        corpo: `
+          <form id="form-novo-fato" class="form-grid" style="max-width:none">
             <div class="field">
               <label for="nf-unidade">Unidade</label>
-              <select id="nf-unidade" required></select>
+              <select id="nf-unidade" required><option value="">Selecione…</option>${options}</select>
             </div>
             <div class="field">
               <label for="nf-titulo">Título</label>
@@ -65,19 +73,36 @@
             </div>
             <div class="form-actions">
               <button type="submit" class="btn btn--primary">Criar fato</button>
-              <button type="button" class="btn btn--ghost" id="btn-cancelar-novo-fato">Cancelar</button>
+              <button type="button" class="link-action" id="btn-cancelar-novo-fato">Cancelar</button>
             </div>
           </form>
-        </div>
-        <div class="panel" id="painel-lista"></div>
-      `;
+        `,
+      });
+
+      document.getElementById('btn-cancelar-novo-fato').addEventListener('click', fecharModal);
+
+      document.getElementById('form-novo-fato').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          const fato = await api('/fatos', {
+            method: 'POST',
+            body: {
+              unidade_id: document.getElementById('nf-unidade').value,
+              titulo: document.getElementById('nf-titulo').value.trim(),
+              descricao: document.getElementById('nf-descricao').value.trim() || undefined,
+            },
+          });
+          location.href = `/fato.html?id=${fato.id}`;
+        } catch (err) {
+          erroApi(err);
+        }
+      });
     }
 
     async function carregarUnidades() {
       unidadesCache = await api('/unidades');
       const options = unidadesCache.map((u) => `<option value="${u.id}">${escapeHtml(u.nome)}</option>`).join('');
       document.getElementById('f-unidade').insertAdjacentHTML('beforeend', options);
-      document.getElementById('nf-unidade').innerHTML = `<option value="">Selecione…</option>${options}`;
     }
 
     function linhaFato(f) {
@@ -134,28 +159,7 @@
       );
 
       if (podeGerir) {
-        document.getElementById('btn-novo-fato').addEventListener('click', () => {
-          document.getElementById('painel-novo-fato').style.display = 'block';
-        });
-        document.getElementById('btn-cancelar-novo-fato').addEventListener('click', () => {
-          document.getElementById('painel-novo-fato').style.display = 'none';
-        });
-        document.getElementById('form-novo-fato').addEventListener('submit', async (e) => {
-          e.preventDefault();
-          try {
-            const fato = await api('/fatos', {
-              method: 'POST',
-              body: {
-                unidade_id: document.getElementById('nf-unidade').value,
-                titulo: document.getElementById('nf-titulo').value.trim(),
-                descricao: document.getElementById('nf-descricao').value.trim() || undefined,
-              },
-            });
-            location.href = `/fato.html?id=${fato.id}`;
-          } catch (err) {
-            erroApi(err);
-          }
-        });
+        document.getElementById('btn-novo-fato').addEventListener('click', abrirNovoFatoModal);
       }
 
       carregarLista();
