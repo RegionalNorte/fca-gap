@@ -18,18 +18,21 @@
       ativo: 'usuarios',
       titulo: 'Usuários',
       breadcrumb: ['Regional Norte', 'Gestão'],
-      acoesHtml: '<a href="/convidar.html" class="btn btn--primary">Novo usuário</a>',
+      acoesHtml: '<button type="button" class="btn btn--primary" id="btn-novo-usuario">Novo usuário</button>',
     });
 
-    const ROTULO_PAPEL = {
-      admin: 'Administrador',
-      gestor_regional: 'Gestor regional',
-      gestor_area: 'Gestor de área',
-      gestor_unidade: 'Gestor de unidade',
-      colaborador: 'Colaborador',
-    };
+    const PAPEIS = [
+      { valor: 'colaborador', rotulo: 'Colaborador' },
+      { valor: 'gestor_unidade', rotulo: 'Gestor de unidade' },
+      { valor: 'gestor_area', rotulo: 'Gestor de área' },
+      { valor: 'gestor_regional', rotulo: 'Gestor regional' },
+      { valor: 'admin', rotulo: 'Administrador' },
+    ];
+    const ROTULO_PAPEL = Object.fromEntries(PAPEIS.map((p) => [p.valor, p.rotulo]));
 
+    let unidadesCache = [];
     let unidadesPorId = {};
+    let usuariosCache = [];
 
     function linha(u) {
       const statusBadge = u.convite_pendente
@@ -47,6 +50,7 @@
           <td>${statusBadge}</td>
           <td class="cell-num">${u.causas_atribuidas}</td>
           <td class="cell-num">${u.acoes_atribuidas}</td>
+          <td><button type="button" class="link-action" onclick="abrirEditarModal('${u.id}')">Editar</button></td>
         </tr>
       `;
     }
@@ -62,18 +66,176 @@
       painel.innerHTML = '<div class="empty-state">Carregando…</div>';
 
       try {
-        const usuarios = await api(`/usuarios?${params.toString()}`);
-        painel.innerHTML = usuarios.length === 0
+        usuariosCache = await api(`/usuarios?${params.toString()}`);
+        painel.innerHTML = usuariosCache.length === 0
           ? '<div class="empty-state">Nenhum usuário encontrado.</div>'
           : `
             <table class="data-table">
-              <thead><tr><th>Usuário</th><th>Papel</th><th>Unidade</th><th>Status</th><th>Causas</th><th>Ações</th></tr></thead>
-              <tbody>${usuarios.map(linha).join('')}</tbody>
+              <thead><tr><th>Usuário</th><th>Papel</th><th>Unidade</th><th>Status</th><th>Causas</th><th>Ações</th><th></th></tr></thead>
+              <tbody>${usuariosCache.map(linha).join('')}</tbody>
             </table>
           `;
       } catch (err) {
         painel.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
       }
+    }
+
+    function selectUnidadeHtml(selecionadoId) {
+      const opcoes = unidadesCache.map((u) => `<option value="${u.id}" ${u.id === selecionadoId ? 'selected' : ''}>${escapeHtml(u.nome)}</option>`).join('');
+      return `<option value="">Sem unidade</option>${opcoes}`;
+    }
+
+    let timerVerificacao = null;
+
+    function abrirNovoUsuarioModal() {
+      abrirModal({
+        titulo: 'Novo usuário',
+        corpo: `
+          <form id="form-novo-usuario" class="form-grid" style="max-width:none">
+            <div class="field">
+              <label for="nu-nome">Nome</label>
+              <input type="text" id="nu-nome" required />
+            </div>
+            <div class="field">
+              <label for="nu-email">E-mail</label>
+              <input type="email" id="nu-email" required />
+              <p class="hint" id="nu-aviso-email"></p>
+            </div>
+            <div class="field">
+              <label for="nu-papel">Papel</label>
+              <select id="nu-papel">${PAPEIS.map((p) => `<option value="${p.valor}" ${p.valor === 'colaborador' ? 'selected' : ''}>${p.rotulo}</option>`).join('')}</select>
+              <p class="hint">Já cria a conta com esse papel — vale desde o primeiro acesso.</p>
+            </div>
+            <div class="field">
+              <label for="nu-unidade">Unidade</label>
+              <select id="nu-unidade">${selectUnidadeHtml(null)}</select>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Convidar</button>
+              <button type="button" class="link-action" id="nu-cancelar">Cancelar</button>
+            </div>
+          </form>
+        `,
+      });
+
+      document.getElementById('nu-cancelar').addEventListener('click', fecharModal);
+      document.getElementById('nu-email').addEventListener('input', aoDigitarEmailNovoUsuario);
+      document.getElementById('form-novo-usuario').addEventListener('submit', aoEnviarNovoUsuario);
+    }
+
+    function aoDigitarEmailNovoUsuario() {
+      clearTimeout(timerVerificacao);
+      const email = document.getElementById('nu-email').value.trim();
+      const aviso = document.getElementById('nu-aviso-email');
+      aviso.textContent = '';
+      if (!email || !email.includes('@')) return;
+
+      timerVerificacao = setTimeout(async () => {
+        try {
+          const { existe, usuario } = await api(`/usuarios/verificar-email?email=${encodeURIComponent(email)}`);
+          aviso.textContent = existe
+            ? `Já cadastrado como ${usuario.nome || usuario.email} — nenhum convite novo será enviado.`
+            : 'E-mail novo — um convite será enviado por e-mail.';
+          aviso.style.color = existe ? 'var(--status-em-andamento-fg)' : 'var(--faint)';
+        } catch {
+          // verificação é só um aviso; falha aqui não bloqueia o envio
+        }
+      }, 400);
+    }
+
+    async function aoEnviarNovoUsuario(e) {
+      e.preventDefault();
+      const btn = document.querySelector('#form-novo-usuario button[type=submit]');
+      btn.disabled = true;
+
+      try {
+        const { usuario, convite_enviado } = await api('/usuarios', {
+          method: 'POST',
+          body: {
+            nome: document.getElementById('nu-nome').value.trim(),
+            email: document.getElementById('nu-email').value.trim(),
+            papel: document.getElementById('nu-papel').value,
+            unidade_id: document.getElementById('nu-unidade').value || undefined,
+          },
+        });
+        fecharModal();
+        mostrarToast(convite_enviado ? `Convite enviado para ${usuario.email}.` : `${usuario.nome || usuario.email} já tinha conta — nenhum convite novo foi enviado.`);
+        carregarLista();
+      } catch (err) {
+        erroApi(err);
+        btn.disabled = false;
+      }
+    }
+
+    function abrirEditarModal(userId) {
+      const u = usuariosCache.find((x) => x.id === userId);
+      if (!u) return;
+
+      abrirModal({
+        titulo: 'Editar usuário',
+        meta: escapeHtml(u.email),
+        corpo: `
+          <form id="form-editar-usuario" class="form-grid" style="max-width:none">
+            <div class="field">
+              <label for="eu-nome">Nome</label>
+              <input type="text" id="eu-nome" value="${escapeHtml(u.nome || '')}" />
+            </div>
+            <div class="field">
+              <label for="eu-papel">Papel</label>
+              <select id="eu-papel">${PAPEIS.map((p) => `<option value="${p.valor}" ${p.valor === u.papel ? 'selected' : ''}>${p.rotulo}</option>`).join('')}</select>
+            </div>
+            <div class="field">
+              <label for="eu-unidade">Unidade</label>
+              <select id="eu-unidade">${selectUnidadeHtml(u.unidade_id)}</select>
+            </div>
+            <div class="field">
+              <label style="display:flex; align-items:center; gap:8px; font-size:14px; color:var(--ink)">
+                <input type="checkbox" id="eu-ativo" ${u.ativo ? 'checked' : ''} style="width:auto" />
+                Conta ativa
+              </label>
+              <p class="hint">Desmarcar impede o login, sem apagar o histórico de causas/ações.</p>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Salvar</button>
+              <button type="button" class="link-action" id="eu-cancelar">Cancelar</button>
+              <button type="button" class="link-action link-action--danger" id="eu-excluir" style="margin-left:auto">Excluir usuário</button>
+            </div>
+          </form>
+        `,
+      });
+
+      document.getElementById('eu-cancelar').addEventListener('click', fecharModal);
+      document.getElementById('form-editar-usuario').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          await api(`/usuarios/${userId}`, {
+            method: 'PATCH',
+            body: {
+              nome: document.getElementById('eu-nome').value.trim() || undefined,
+              papel: document.getElementById('eu-papel').value,
+              unidade_id: document.getElementById('eu-unidade').value || null,
+              ativo: document.getElementById('eu-ativo').checked,
+            },
+          });
+          fecharModal();
+          mostrarToast('Usuário atualizado.');
+          carregarLista();
+        } catch (err) {
+          erroApi(err);
+        }
+      });
+
+      document.getElementById('eu-excluir').addEventListener('click', async () => {
+        if (!confirm(`Excluir ${u.nome || u.email}? Só é possível se não houver fatos, causas ou ações ligados a esse usuário.`)) return;
+        try {
+          await api(`/usuarios/${userId}`, { method: 'DELETE' });
+          fecharModal();
+          mostrarToast('Usuário excluído.');
+          carregarLista();
+        } catch (err) {
+          erroApi(err);
+        }
+      });
     }
 
     async function iniciar() {
@@ -101,14 +263,16 @@
       `;
 
       try {
-        const unidades = await api('/unidades');
-        unidadesPorId = Object.fromEntries(unidades.map((u) => [u.id, u.nome]));
+        unidadesCache = await api('/unidades');
+        unidadesPorId = Object.fromEntries(unidadesCache.map((u) => [u.id, u.nome]));
       } catch {
+        unidadesCache = [];
         unidadesPorId = {};
       }
 
       document.getElementById('f-papel').addEventListener('change', carregarLista);
       document.getElementById('f-status').addEventListener('change', carregarLista);
+      document.getElementById('btn-novo-usuario').addEventListener('click', abrirNovoUsuarioModal);
 
       carregarLista();
     }

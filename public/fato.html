@@ -129,7 +129,7 @@
 
       const campoResponsavel = podeGerir
         ? `<select id="modal-c-responsavel"><option value="">Sem responsável</option>${usuarios.map((u) => `<option value="${u.id}" ${u.id === c.responsavel_id ? 'selected' : ''}>${escapeHtml(u.nome || u.email)}</option>`).join('')}</select>
-           <p class="hint"><a href="/convidar.html?retorno_tipo=causa&retorno_id=${causaId}">+ Convidar novo responsável</a></p>`
+           <p class="hint"><a href="/convidar.html?retorno_tipo=causa&retorno_id=${causaId}&fato_id=${fatoId}">+ Convidar novo responsável</a></p>`
         : `<div style="padding-top:6px">${c.responsavel_nome ? chipHtml(c.responsavel_nome) : 'Sem responsável'}</div>`;
 
       abrirModal({
@@ -202,7 +202,7 @@
         ? `${usuarios.length === 0 ? '<p class="hint">Nenhum usuário disponível.</p>' : `<div class="checklist">${usuarios.map((u) => `
              <label><input type="checkbox" value="${u.id}" ${responsaveisAtuais.includes(u.id) ? 'checked' : ''}/> ${escapeHtml(u.nome || u.email)}</label>
            `).join('')}</div>`}
-           <p class="hint"><a href="/convidar.html?retorno_tipo=acao&retorno_id=${acaoId}">+ Convidar novo responsável</a></p>`
+           <p class="hint"><a href="/convidar.html?retorno_tipo=acao&retorno_id=${acaoId}&fato_id=${fatoId}">+ Convidar novo responsável</a></p>`
         : chipsResponsaveis(a.responsaveis_nomes);
 
       abrirModal({

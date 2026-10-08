@@ -82,6 +82,12 @@ const criarOuConvidar = asyncHandler(async (req, res) => {
     throw new AppError('Papel inválido', 400);
   }
 
+  // só admin escolhe o papel no convite; convite de dentro de uma causa/ação
+  // (gestor_*) sempre nasce colaborador, sem exceção
+  if (papel && papel !== 'colaborador' && req.usuario.papel !== 'admin') {
+    throw new AppError('Só um administrador pode definir esse papel', 403);
+  }
+
   const existente = await pool.query('SELECT * FROM usuarios WHERE email = $1', [emailInformado]);
 
   if (existente.rows[0]) {
@@ -107,25 +113,55 @@ const criarOuConvidar = asyncHandler(async (req, res) => {
 });
 
 const atualizar = asyncHandler(async (req, res) => {
-  const { nome, unidade_id, papel, ativo } = req.body;
-
-  if (papel && !PAPEIS_VALIDOS.includes(papel)) {
+  // atualização parcial de verdade: um campo ausente no corpo não muda
+  // nada, mas um campo enviado como null (ex: "Sem unidade") limpa a
+  // coluna — diferente de COALESCE, que trataria os dois casos como "não
+  // mude nada" e nunca deixaria limpar unidade_id.
+  if (req.body.papel !== undefined && req.body.papel && !PAPEIS_VALIDOS.includes(req.body.papel)) {
     throw new AppError('Papel inválido', 400);
   }
 
+  const campos = [];
+  const valores = [];
+
+  for (const chave of ['nome', 'unidade_id', 'papel', 'ativo']) {
+    if (req.body[chave] !== undefined) {
+      campos.push(`${chave} = $${campos.length + 1}`);
+      valores.push(req.body[chave]);
+    }
+  }
+
+  if (campos.length === 0) {
+    throw new AppError('Nada para atualizar', 400);
+  }
+
+  valores.push(req.params.id);
+
   const { rows } = await pool.query(
-    `UPDATE usuarios SET
-       nome = COALESCE($1, nome),
-       unidade_id = COALESCE($2, unidade_id),
-       papel = COALESCE($3, papel),
-       ativo = COALESCE($4, ativo)
-     WHERE id = $5
-     RETURNING *`,
-    [nome ?? null, unidade_id ?? null, papel ?? null, ativo ?? null, req.params.id]
+    `UPDATE usuarios SET ${campos.join(', ')} WHERE id = $${valores.length} RETURNING *`,
+    valores
   );
 
   if (!rows[0]) throw new AppError('Usuário não encontrado', 404);
   res.json(usuarioPublico(rows[0]));
 });
 
-module.exports = { listar, buscarPorId, verificarEmail, criarOuConvidar, atualizar };
+const remover = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const [{ rows: causas }, { rows: acoes }, { rows: fatos }] = await Promise.all([
+    pool.query('SELECT 1 FROM causas WHERE responsavel_id = $1 LIMIT 1', [id]),
+    pool.query('SELECT 1 FROM acoes_responsaveis WHERE usuario_id = $1 LIMIT 1', [id]),
+    pool.query('SELECT 1 FROM fatos WHERE criado_por = $1 LIMIT 1', [id]),
+  ]);
+
+  if (causas.length || acoes.length || fatos.length) {
+    throw new AppError('Não é possível excluir: há fatos, causas ou ações ligados a este usuário.', 409);
+  }
+
+  const { rowCount } = await pool.query('DELETE FROM usuarios WHERE id = $1', [id]);
+  if (!rowCount) throw new AppError('Usuário não encontrado', 404);
+  res.status(204).send();
+});
+
+module.exports = { listar, buscarPorId, verificarEmail, criarOuConvidar, atualizar, remover };

@@ -47,6 +47,11 @@ const atualizar = asyncHandler(async (req, res) => {
 });
 
 const remover = asyncHandler(async (req, res) => {
+  const { rows: vinculo } = await pool.query('SELECT COUNT(*) FROM fatos WHERE unidade_id = $1', [req.params.id]);
+  if (Number(vinculo[0].count) > 0) {
+    throw new AppError('Não é possível excluir: há fatos registrados nesta unidade.', 409);
+  }
+
   const { rowCount } = await pool.query('DELETE FROM unidades WHERE id = $1', [req.params.id]);
   if (!rowCount) throw new AppError('Unidade não encontrada', 404);
   res.status(204).send();

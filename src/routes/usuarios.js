@@ -14,5 +14,6 @@ router.get('/verificar-email', permitir(...PAPEIS_GESTAO), controller.verificarE
 router.get('/:id', permitir('admin'), controller.buscarPorId);
 router.post('/', permitir(...PAPEIS_GESTAO), controller.criarOuConvidar);
 router.patch('/:id', permitir('admin'), controller.atualizar);
+router.delete('/:id', permitir('admin'), controller.remover);
 
 module.exports = router;

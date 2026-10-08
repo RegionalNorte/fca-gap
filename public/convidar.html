@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Convidar — FCA GAP</title>
+<title>Convidar responsável — FCA GAP</title>
 <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body>
@@ -15,22 +15,44 @@
   <script>
     exigirAuth();
 
-    const retornoTipo = qs('retorno_tipo'); // 'causa' | 'acao' | null
+    // Esta tela só existe pro convite contextual (de dentro de uma causa
+    // ou ação, via "+ Convidar novo responsável"). Criar usuário "solto"
+    // é o modal "Novo usuário" na tela de Usuários.
+    const retornoTipo = qs('retorno_tipo'); // 'causa' | 'acao'
     const retornoId = qs('retorno_id');
+    const fatoIdRetorno = qs('fato_id'); // só quando o convite veio do modal de editar causa/ação em fato.html
     const emContexto = Boolean(retornoTipo && retornoId);
 
     const content = montarLayout({
-      ativo: 'usuarios',
-      titulo: emContexto ? 'Convidar responsável' : 'Novo usuário',
-      breadcrumb: ['Regional Norte', 'Usuários'],
+      ativo: 'fatos',
+      titulo: 'Convidar responsável',
+      breadcrumb: ['Regional Norte', 'Fatos'],
     });
 
     let timerVerificacao = null;
 
+    function voltarHref() {
+      // veio do modal de editar causa/ação em fato.html: volta pro fato,
+      // não pra página solta de causa.html/acao.html (que não é mais onde
+      // a edição acontece)
+      if (fatoIdRetorno) return `/fato.html?id=${fatoIdRetorno}`;
+      return retornoTipo === 'causa' ? `/causa.html?id=${retornoId}` : `/acao.html?id=${retornoId}`;
+    }
+
     function montarPagina() {
+      if (!emContexto) {
+        content.innerHTML = `
+          <div class="panel"><div class="empty-state">
+            Essa tela precisa de um contexto (uma causa ou ação). Pra criar um usuário avulso, use
+            <a href="/usuarios.html">a tela de Usuários</a>.
+          </div></div>
+        `;
+        return;
+      }
+
       content.innerHTML = `
-        <div class="panel" style="padding:22px; max-width:480px; margin-bottom:28px">
-          <form id="form-convite" class="form-grid">
+        <div class="panel" style="padding:22px; max-width:480px">
+          <form id="form-convite" class="form-grid" style="max-width:none">
             <div class="field">
               <label for="nome">Nome</label>
               <input type="text" id="nome" required />
@@ -41,27 +63,15 @@
               <p class="hint" id="aviso-email"></p>
             </div>
             <div class="form-actions">
-              <button type="submit" class="btn btn--primary" id="btn-enviar">${emContexto ? 'Atribuir' : 'Convidar'}</button>
-              <a href="${emContexto ? voltarHref() : '/usuarios.html'}" class="link-action">Cancelar</a>
+              <button type="submit" class="btn btn--primary" id="btn-enviar">Atribuir</button>
+              <a href="${voltarHref()}" class="link-action">Cancelar</a>
             </div>
           </form>
         </div>
-
-        ${!emContexto ? `
-        <div>
-          <div class="section-label" style="margin-bottom:10px">Convites recentes</div>
-          <div class="panel" id="painel-recentes"></div>
-        </div>` : ''}
       `;
 
       document.getElementById('email').addEventListener('input', aoDigitarEmail);
       document.getElementById('form-convite').addEventListener('submit', aoEnviar);
-
-      if (!emContexto) carregarRecentes();
-    }
-
-    function voltarHref() {
-      return retornoTipo === 'causa' ? `/causa.html?id=${retornoId}` : `/acao.html?id=${retornoId}`;
     }
 
     function aoDigitarEmail() {
@@ -93,21 +103,11 @@
       const email = document.getElementById('email').value.trim();
 
       try {
-        const { usuario, convite_enviado } = await api('/usuarios', { method: 'POST', body: { nome, email } });
-
-        if (emContexto) {
-          await atribuir(usuario.id);
-          location.href = voltarHref();
-          return;
-        }
-
-        mostrarToast(convite_enviado ? `Convite enviado para ${email}.` : `${usuario.nome || email} já tinha conta — nenhum convite novo foi enviado.`);
-        document.getElementById('form-convite').reset();
-        document.getElementById('aviso-email').textContent = '';
-        carregarRecentes();
+        const { usuario } = await api('/usuarios', { method: 'POST', body: { nome, email } });
+        await atribuir(usuario.id);
+        location.href = voltarHref();
       } catch (err) {
         erroApi(err);
-      } finally {
         btn.disabled = false;
       }
     }
@@ -120,31 +120,6 @@
         const atuais = acao.responsaveis_ids || [];
         if (!atuais.includes(usuarioId)) atuais.push(usuarioId);
         await api(`/acoes/${retornoId}`, { method: 'PATCH', body: { responsaveis: atuais } });
-      }
-    }
-
-    async function carregarRecentes() {
-      const painel = document.getElementById('painel-recentes');
-      painel.innerHTML = '<div class="empty-state">Carregando…</div>';
-      try {
-        const usuarios = await api('/usuarios?status=convite_pendente');
-        usuarios.sort((a, b) => new Date(b.convite_enviado_em) - new Date(a.convite_enviado_em));
-        painel.innerHTML = usuarios.length === 0
-          ? '<div class="empty-state">Nenhum convite pendente.</div>'
-          : `
-            <table class="data-table">
-              <thead><tr><th>Nome</th><th>E-mail</th><th>Convidado em</th></tr></thead>
-              <tbody>${usuarios.map((u) => `
-                <tr>
-                  <td>${escapeHtml(u.nome || '—')}</td>
-                  <td>${escapeHtml(u.email)}</td>
-                  <td class="mono">${formatarData(u.convite_enviado_em)}</td>
-                </tr>
-              `).join('')}</tbody>
-            </table>
-          `;
-      } catch (err) {
-        painel.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
       }
     }
 

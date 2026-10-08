@@ -47,6 +47,16 @@ const atualizar = asyncHandler(async (req, res) => {
 });
 
 const remover = asyncHandler(async (req, res) => {
+  // causas/ações só existem dentro de um fato, então checar fatos das
+  // unidades desta área já cobre a cadeia inteira
+  const { rows: vinculo } = await pool.query(
+    `SELECT COUNT(*) FROM fatos f JOIN unidades u ON u.id = f.unidade_id WHERE u.area_id = $1`,
+    [req.params.id]
+  );
+  if (Number(vinculo[0].count) > 0) {
+    throw new AppError('Não é possível excluir: há fatos registrados em unidades desta área.', 409);
+  }
+
   const { rowCount } = await pool.query('DELETE FROM areas WHERE id = $1', [req.params.id]);
   if (!rowCount) throw new AppError('Área não encontrada', 404);
   res.status(204).send();
