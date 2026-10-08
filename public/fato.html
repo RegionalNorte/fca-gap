@@ -40,9 +40,13 @@
       `;
     }
 
+    function textoDias(n) {
+      return n === null || n === undefined ? '' : ` (${n} dia${n === 1 ? '' : 's'})`;
+    }
+
     function acaoCard(a, causaId) {
       const datas = a.data_finalizada
-        ? `iniciada ${formatarData(a.data_iniciada)} · finalizada ${formatarData(a.data_finalizada)}`
+        ? `iniciada ${formatarData(a.data_iniciada)} · finalizada ${formatarData(a.data_finalizada)}${textoDias(a.dias_reais)}`
         : a.data_iniciada
           ? `iniciada em ${formatarData(a.data_iniciada)} · ainda não finalizada`
           : 'ainda não iniciada';
@@ -57,7 +61,7 @@
             </div>
           </div>
           ${a.responsaveis_nomes ? chipsResponsaveis(a.responsaveis_nomes) : ''}
-          <div class="datas">previsto ${formatarData(a.inicio_previsto)} → ${formatarData(a.final_previsto)} · ${datas}</div>
+          <div class="datas">previsto ${formatarData(a.inicio_previsto)} → ${formatarData(a.final_previsto)}${textoDias(a.dias_previsto)} · ${datas}</div>
           ${a.prazo_vencido_sem_conclusao || (a.status === 'nao_iniciada' || a.status === 'em_andamento') && new Date(a.final_previsto) < new Date()
             ? '<div class="alerta-vencido">Prazo vencido sem conclusão</div>'
             : ''}
