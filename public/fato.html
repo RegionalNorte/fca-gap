@@ -430,7 +430,7 @@
         const f = await api(`/fatos/${fatoId}`);
         fatoCarregado = f;
 
-        document.querySelector('.topbar h1').innerHTML = f.titulo;
+        document.querySelector('.topbar h1').innerHTML = tituloClampHtml(f.titulo, `topo-${f.id}`);
         document.querySelector('.topbar-breadcrumb').innerHTML =
           ['Regional Norte', escapeHtml(f.area_nome), escapeHtml(f.unidade_nome)].join(' <span class="sep">/</span> ');
         document.querySelector('.topbar-actions').innerHTML = acoesStatusFato(f);
@@ -465,7 +465,10 @@
           if (btnExcluirFato) btnExcluirFato.addEventListener('click', excluirFato);
           if (btnEditarFato) btnEditarFato.addEventListener('click', () => abrirEditarFatoModal(f));
         }
-        requestAnimationFrame(() => f.causas.forEach((c) => ativarTituloVerMais(c.id, c.descricao)));
+        requestAnimationFrame(() => {
+          ativarTituloVerMais(`topo-${f.id}`, f.titulo);
+          f.causas.forEach((c) => ativarTituloVerMais(c.id, c.descricao));
+        });
       } catch (err) {
         content.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
       }
