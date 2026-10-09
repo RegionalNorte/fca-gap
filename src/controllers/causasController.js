@@ -39,6 +39,24 @@ const buscarPorId = asyncHandler(async (req, res) => {
   const causa = rows[0];
   if (!causa) throw new AppError('Causa não encontrada', 404);
 
+  if (req.usuario.papel === 'colaborador') {
+    let temAcesso = causa.responsavel_id === req.usuario.id;
+    if (!temAcesso) {
+      const { rows: acesso } = await pool.query(
+        `SELECT 1 FROM acoes a JOIN acoes_responsaveis res ON res.acao_id = a.id
+         WHERE a.causa_id = $1 AND res.usuario_id = $2 LIMIT 1`,
+        [causa.id, req.usuario.id]
+      );
+      temAcesso = acesso.length > 0;
+    }
+    if (!temAcesso) throw new AppError('Você não tem acesso a esta causa', 403);
+  } else {
+    const unidadeId = await unidadeDaCausa(causa.id);
+    if (!(await unidadeNoEscopo(req.usuario, unidadeId))) {
+      throw new AppError('Você não tem acesso a esta causa', 403);
+    }
+  }
+
   const { rows: acoes } = await pool.query(
     `SELECT
        a.*,

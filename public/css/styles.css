@@ -910,22 +910,6 @@ table.data-table a.row-link:hover { color: var(--accent); }
   padding: 5px 10px;
 }
 
-/* trava por volta de 4 ações de altura — dali pra frente rola por dentro
-   da lista em vez do modal inteiro crescer quase até a tela toda.
-   flex (não flex-shrink:0 do .modal-body > *) pra isso respeitar o
-   espaço que realmente sobra no modal, sem o modal-body rolar junto. */
-.modal-body > .modal-acoes-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1;
-  flex-shrink: 1;
-  min-height: 0;
-  max-height: 740px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
 /* ~5 usuários visíveis antes de rolar — com poucos cabe tudo, com muitos
    não deixa a caixa (e o modal) crescer sem parar */
 .checklist { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; max-height: 158px; overflow: auto; }
@@ -958,8 +942,9 @@ table.data-table a.row-link:hover { color: var(--accent); }
 }
 
 /* causa/ação: título e descrições podem ser bem mais longos que um
-   formulário comum, e a lista de ações respira melhor com mais largura */
-.modal-box--lg { max-width: 920px; }
+   formulário comum, e a lista de ações respira melhor com mais largura
+   e mais altura (mais ações empilhadas visíveis antes de rolar) */
+.modal-box--lg { max-width: 920px; max-height: 94vh; }
 
 .modal-header {
   display: flex;

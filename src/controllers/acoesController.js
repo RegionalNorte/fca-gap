@@ -90,15 +90,36 @@ const listar = asyncHandler(async (req, res) => {
 
 const buscarPorId = asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`${SELECT_ACAO} WHERE a.id = $1 GROUP BY a.id`, [req.params.id]);
-  if (!rows[0]) throw new AppError('Ação não encontrada', 404);
-  res.json(rows[0]);
+  const acao = rows[0];
+  if (!acao) throw new AppError('Ação não encontrada', 404);
+
+  if (req.usuario.papel === 'colaborador') {
+    if (!(acao.responsaveis_ids || []).includes(req.usuario.id)) {
+      throw new AppError('Você não tem acesso a esta ação', 403);
+    }
+  } else {
+    const unidadeId = await unidadeDaAcao(acao.id);
+    if (!(await unidadeNoEscopo(req.usuario, unidadeId))) {
+      throw new AppError('Você não tem acesso a esta ação', 403);
+    }
+  }
+
+  res.json(acao);
 });
 
 const criar = asyncHandler(async (req, res) => {
-  const { causa_id, descricao, inicio_previsto, final_previsto, evidencia, responsaveis } = req.body;
+  const { causa_id, descricao, inicio_previsto, final_previsto, data_iniciada, data_finalizada, evidencia, responsaveis } = req.body;
 
   if (!causa_id || !descricao || !inicio_previsto || !final_previsto) {
     throw new AppError('Informe causa_id, descricao, inicio_previsto e final_previsto', 400);
+  }
+
+  // mesma regra do banco (chk_acoes_datas_reais), avisada antes de bater
+  // na constraint: às vezes a ação já nasce com datas reais preenchidas
+  // (foi registrada depois de já ter acontecido), mas nunca só com a
+  // data final sem a inicial.
+  if (data_finalizada && !data_iniciada) {
+    throw new AppError('Informe a data iniciada antes da data finalizada', 400);
   }
 
   const descricaoSegura = sanitizarTextoRico(descricao);
@@ -117,10 +138,10 @@ const criar = asyncHandler(async (req, res) => {
     await client.query('BEGIN');
 
     const { rows } = await client.query(
-      `INSERT INTO acoes (causa_id, descricao, inicio_previsto, final_previsto, evidencia)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO acoes (causa_id, descricao, inicio_previsto, final_previsto, data_iniciada, data_finalizada, evidencia)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [causa_id, descricaoSegura, inicio_previsto, final_previsto, evidencia || null]
+      [causa_id, descricaoSegura, inicio_previsto, final_previsto, data_iniciada || null, data_finalizada || null, evidencia || null]
     );
 
     await substituirResponsaveis(client, rows[0].id, responsaveis);

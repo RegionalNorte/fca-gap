@@ -40,10 +40,6 @@
       `;
     }
 
-    function textoDias(n) {
-      return n === null || n === undefined ? '' : ` (${n} dia${n === 1 ? '' : 's'})`;
-    }
-
     // nome + e-mail juntos em toda lista de responsável — com poucos
     // usuários cabe tranquilo, e é o que dá pra buscar por e-mail depois
     function textoUsuario(u) {
@@ -76,68 +72,6 @@
       });
     }
 
-    // --- campo "Responsáveis" (checklist) com busca, usado em ação ---
-
-    function campoResponsaveisComBusca(prefixo, selecionadosIds) {
-      if (usuariosCache.length === 0) {
-        return `<p class="hint" id="${prefixo}-sem-usuarios">Nenhum usuário disponível.</p>`;
-      }
-      return `
-        <input type="text" id="${prefixo}-busca" class="busca-usuarios" placeholder="Buscar por nome ou e-mail…" />
-        <div class="checklist" id="${prefixo}-checklist">${usuariosCache.map((u) => `
-          <label data-busca="${escapeHtml(textoUsuario(u).toLowerCase())}"><input type="checkbox" value="${u.id}" ${selecionadosIds.includes(u.id) ? 'checked' : ''}/> ${escapeHtml(textoUsuario(u))}</label>
-        `).join('')}</div>
-      `;
-    }
-
-    function ativarBuscaChecklist(prefixo) {
-      const busca = document.getElementById(`${prefixo}-busca`);
-      if (!busca) return;
-      busca.addEventListener('input', () => {
-        const t = busca.value.trim().toLowerCase();
-        document.querySelectorAll(`#${prefixo}-checklist label`).forEach((label) => {
-          label.style.display = !t || label.dataset.busca.includes(t) ? '' : 'none';
-        });
-      });
-    }
-
-    function acaoCard(a, causaId) {
-      const realizado = a.data_finalizada
-        ? `${formatarData(a.data_iniciada)} → ${formatarData(a.data_finalizada)}${textoDias(a.dias_reais)}`
-        : a.data_iniciada
-          ? `iniciada ${formatarData(a.data_iniciada)} · em andamento`
-          : 'ainda não iniciada';
-      const vencida = a.prazo_vencido_sem_conclusao
-        || ((a.status === 'nao_iniciada' || a.status === 'em_andamento') && new Date(a.final_previsto) < new Date());
-
-      return `
-        <div class="acao-card">
-          <div class="descricao">${tituloClampHtml(a.descricao, a.id)}</div>
-          ${vencida ? '<div class="acao-card-alerta">Prazo vencido sem conclusão</div>' : ''}
-          <div class="acao-card-datas">
-            <div>
-              <div class="rotulo">Previsto</div>
-              <div class="valor">${formatarData(a.inicio_previsto)} → ${formatarData(a.final_previsto)}${textoDias(a.dias_previsto)}</div>
-            </div>
-            <div>
-              <div class="rotulo">Realizado</div>
-              <div class="valor${a.data_iniciada ? '' : ' valor--vazio'}">${realizado}</div>
-            </div>
-          </div>
-          <div class="acao-card-resp-row">
-            <div class="acao-card-resp">
-              <div class="rotulo">Responsáveis</div>
-              ${a.responsaveis_nomes ? chipsResponsaveis(a.responsaveis_nomes) : '<span style="color:var(--faint); font-size:13px">Sem responsável</span>'}
-            </div>
-            <div class="acao-card-bottom">
-              ${statusAcaoHtml(a.status)}
-              <button type="button" class="link-action" onclick="abrirEditarAcaoModal('${a.id}', '${causaId}')">Editar</button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
     function blocoCausa(c) {
       const responsavel = c.responsavel_nome ? chipHtml(c.responsavel_nome) : '<span style="color:var(--faint); font-size:13px">Sem responsável</span>';
       const podeEditarCausa = podeGerir || c.responsavel_id === usuario.id;
@@ -151,7 +85,7 @@
             </div>
             <div class="causa-header-actions">
               ${podeEditarCausa ? `<button type="button" class="link-action" onclick="abrirEditarCausaModal('${c.id}')">Editar</button>` : ''}
-              <button type="button" class="link-action" onclick="abrirAcoesModal('${c.id}')">Ver ações (${n})</button>
+              <a class="link-action" href="/causa.html?id=${c.id}">Ver ações (${n})</a>
             </div>
           </div>
         </div>
@@ -276,52 +210,6 @@
           btnEnviar.disabled = false;
         }
       });
-    }
-
-    // usado depois de convidar inline num modal de ação: se a pessoa já
-    // tinha e-mail cadastrado (e por isso já aparecia na checklist, só
-    // sem marcar), marca a que já existe em vez de duplicar a linha
-    function marcarOuAdicionarChecklistAcao(usuarioNovo) {
-      const existente = document.querySelector(`#modal-a-checklist input[value="${usuarioNovo.id}"]`);
-      if (existente) {
-        existente.checked = true;
-        return;
-      }
-      const semUsuarios = document.getElementById('modal-a-sem-usuarios');
-      let checklist = document.getElementById('modal-a-checklist');
-      if (!checklist) {
-        checklist = document.createElement('div');
-        checklist.className = 'checklist';
-        checklist.id = 'modal-a-checklist';
-        semUsuarios.replaceWith(checklist);
-      }
-      const label = document.createElement('label');
-      label.dataset.busca = textoUsuario(usuarioNovo).toLowerCase();
-      label.innerHTML = `<input type="checkbox" value="${usuarioNovo.id}" checked/> ${escapeHtml(textoUsuario(usuarioNovo))}`;
-      checklist.appendChild(label);
-    }
-
-    function corpoModalAcoes(c) {
-      return `
-        <div class="descricao" style="margin-bottom:14px">${tituloClampHtml(c.descricao, `modal-${c.id}`)}</div>
-        <div class="modal-acoes-list">
-          ${c.acoes.length === 0 ? '<div class="empty-state" style="padding:12px 0">Nenhuma ação cadastrada.</div>' : c.acoes.map((a) => acaoCard(a, c.id)).join('')}
-        </div>
-        ${podeGerir ? `<button type="button" class="link-action" onclick="abrirCriarAcaoModal('${c.id}')">+ Nova ação</button>` : ''}
-      `;
-    }
-
-    function abrirAcoesModal(causaId) {
-      const c = fatoCarregado.causas.find((x) => x.id === causaId);
-      if (!c) return;
-      abrirModal({
-        titulo: 'Ações da causa',
-        meta: `Responsável pela causa: ${escapeHtml(c.responsavel_nome || 'sem responsável')}`,
-        corpo: corpoModalAcoes(c),
-        largura: 'lg',
-      });
-      ativarTituloVerMais(`modal-${c.id}`, c.descricao);
-      c.acoes.forEach((a) => ativarTituloVerMais(a.id, a.descricao));
     }
 
     async function abrirCriarCausaModal() {
@@ -453,203 +341,6 @@
             await api(`/causas/${causaId}`, { method: 'DELETE' });
             fecharModal();
             await carregar();
-          } catch (err) {
-            erroApi(err);
-          }
-        });
-      }
-    }
-
-    async function abrirCriarAcaoModal(causaId) {
-      await carregarUsuariosCache();
-
-      // quem está criando já fica marcado como responsável — pode
-      // desmarcar e deixar sem, ou marcar outros também
-      const campoResponsaveis = campoResponsaveisComBusca('modal-a', [usuario.id]);
-
-      abrirModal({
-        titulo: 'Nova ação',
-        corpo: `
-          <form id="modal-form-acao" class="form-grid" style="max-width:none">
-            <div class="field">
-              <label for="modal-a-descricao-editor">Descrição</label>
-              ${corpoEditorRico('modal-a-descricao-editor', 'Descreva a ação…')}
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
-              <div class="field">
-                <label for="modal-a-inicio">Início previsto</label>
-                <input type="date" id="modal-a-inicio" required />
-              </div>
-              <div class="field">
-                <label for="modal-a-final">Final previsto</label>
-                <input type="date" id="modal-a-final" required />
-              </div>
-            </div>
-            <div class="field">
-              <label for="modal-a-evidencia">Evidência</label>
-              <textarea id="modal-a-evidencia"></textarea>
-            </div>
-            <div class="field">
-              <label>Responsáveis</label>
-              ${campoResponsaveis}
-              <p class="hint">Por padrão fica com quem está criando — pode desmarcar e deixar sem responsável, ou marcar outros.</p>
-              ${corpoConvidarInline('modal-a')}
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn btn--primary">Criar</button>
-              <button type="button" class="link-action" id="modal-a-cancelar">Cancelar</button>
-            </div>
-          </form>
-        `,
-        largura: 'lg',
-      });
-
-      ativarEditorRico('modal-a-descricao-editor');
-      document.getElementById('modal-a-cancelar').addEventListener('click', () => abrirAcoesModal(causaId));
-
-      ativarBuscaChecklist('modal-a');
-
-      ativarConvidarInline('modal-a', (usuarioNovo) => {
-        marcarOuAdicionarChecklistAcao(usuarioNovo);
-      });
-
-      document.getElementById('modal-form-acao').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const descricaoTexto = textoPlanoEditorRico('modal-a-descricao-editor');
-        if (!descricaoTexto) {
-          mostrarToast('Informe a descrição.', 'erro');
-          return;
-        }
-        const body = {
-          causa_id: causaId,
-          descricao: obterHtmlEditorRico('modal-a-descricao-editor'),
-          inicio_previsto: document.getElementById('modal-a-inicio').value,
-          final_previsto: document.getElementById('modal-a-final').value,
-          evidencia: document.getElementById('modal-a-evidencia').value.trim() || null,
-          responsaveis: Array.from(document.querySelectorAll('#modal-form-acao .checklist input:checked')).map((el) => el.value),
-        };
-        try {
-          await api('/acoes', { method: 'POST', body });
-          mostrarToast('Ação criada.');
-          await carregar();
-          abrirAcoesModal(causaId);
-        } catch (err) {
-          erroApi(err);
-        }
-      });
-    }
-
-    async function abrirEditarAcaoModal(acaoId, causaId) {
-      let a;
-      try {
-        a = await api(`/acoes/${acaoId}`);
-      } catch (err) {
-        erroApi(err);
-        return;
-      }
-
-      if (podeGerir) await carregarUsuariosCache();
-
-      const responsaveisAtuais = a.responsaveis_ids || [];
-      const campoResponsaveis = podeGerir
-        ? `${campoResponsaveisComBusca('modal-a', responsaveisAtuais)}
-           ${corpoConvidarInline('modal-a')}`
-        : chipsResponsaveis(a.responsaveis_nomes);
-
-      abrirModal({
-        titulo: 'Editar ação',
-        corpo: `
-          <div>${statusAcaoHtml(a.status)} <span style="font-size:12px; color:var(--faint); margin-left:6px">— calculado automaticamente a partir das datas</span></div>
-          <form id="modal-form-acao" class="form-grid" style="max-width:none">
-            <div class="field">
-              <label for="modal-a-descricao-editor">Descrição</label>
-              ${corpoEditorRico('modal-a-descricao-editor', 'Descreva a ação…')}
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
-              <div class="field">
-                <label for="modal-a-inicio">Início previsto</label>
-                <input type="date" id="modal-a-inicio" required value="${a.inicio_previsto ? a.inicio_previsto.slice(0, 10) : ''}" />
-              </div>
-              <div class="field">
-                <label for="modal-a-final">Final previsto</label>
-                <input type="date" id="modal-a-final" required value="${a.final_previsto ? a.final_previsto.slice(0, 10) : ''}" />
-              </div>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
-              <div class="field">
-                <label for="modal-a-iniciada">Data iniciada (real)</label>
-                <input type="date" id="modal-a-iniciada" value="${a.data_iniciada ? a.data_iniciada.slice(0, 10) : ''}" />
-              </div>
-              <div class="field">
-                <label for="modal-a-finalizada">Data finalizada (real)</label>
-                <input type="date" id="modal-a-finalizada" value="${a.data_finalizada ? a.data_finalizada.slice(0, 10) : ''}" />
-              </div>
-            </div>
-            <div class="field">
-              <label for="modal-a-evidencia">Evidência</label>
-              <textarea id="modal-a-evidencia">${a.evidencia ? escapeHtml(a.evidencia) : ''}</textarea>
-            </div>
-            <div class="field">
-              <label>Responsáveis</label>
-              ${campoResponsaveis}
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn btn--primary">Salvar</button>
-              <button type="button" class="link-action" id="modal-a-cancelar">Cancelar</button>
-              ${podeGerir ? `<button type="button" class="link-action link-action--danger" id="modal-a-excluir" style="margin-left:auto">Excluir ação</button>` : ''}
-            </div>
-          </form>
-        `,
-        largura: 'lg',
-      });
-
-      ativarEditorRico('modal-a-descricao-editor');
-      definirHtmlEditorRico('modal-a-descricao-editor', a.descricao);
-      document.getElementById('modal-a-cancelar').addEventListener('click', () => abrirAcoesModal(causaId));
-
-      if (podeGerir) {
-        ativarBuscaChecklist('modal-a');
-
-        ativarConvidarInline('modal-a', (usuarioNovo) => {
-          marcarOuAdicionarChecklistAcao(usuarioNovo);
-        });
-      }
-
-      document.getElementById('modal-form-acao').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const descricaoTexto = textoPlanoEditorRico('modal-a-descricao-editor');
-        if (!descricaoTexto) {
-          mostrarToast('Informe a descrição.', 'erro');
-          return;
-        }
-        const body = {
-          descricao: obterHtmlEditorRico('modal-a-descricao-editor'),
-          inicio_previsto: document.getElementById('modal-a-inicio').value,
-          final_previsto: document.getElementById('modal-a-final').value,
-          data_iniciada: document.getElementById('modal-a-iniciada').value || null,
-          data_finalizada: document.getElementById('modal-a-finalizada').value || null,
-          evidencia: document.getElementById('modal-a-evidencia').value.trim() || null,
-        };
-        if (podeGerir) {
-          body.responsaveis = Array.from(document.querySelectorAll('#modal-form-acao .checklist input:checked')).map((el) => el.value);
-        }
-        try {
-          await api(`/acoes/${acaoId}`, { method: 'PATCH', body });
-          await carregar();
-          abrirAcoesModal(causaId);
-        } catch (err) {
-          erroApi(err);
-        }
-      });
-
-      const btnExcluir = document.getElementById('modal-a-excluir');
-      if (btnExcluir) {
-        btnExcluir.addEventListener('click', async () => {
-          if (!confirm('Excluir esta ação?')) return;
-          try {
-            await api(`/acoes/${acaoId}`, { method: 'DELETE' });
-            await carregar();
-            abrirAcoesModal(causaId);
           } catch (err) {
             erroApi(err);
           }
@@ -800,19 +491,7 @@
       }
     }
 
-    // vindo da tela de Prazos (?abrir_acao=ID): depois de carregar o fato,
-    // já abre essa ação direto no modal de editar, em vez de deixar a
-    // pessoa procurando ela na lista de causas
-    async function iniciar() {
-      await carregar();
-      const abrirAcaoId = qs('abrir_acao');
-      if (abrirAcaoId && fatoCarregado) {
-        const causa = fatoCarregado.causas.find((c) => c.acoes.some((a) => a.id === abrirAcaoId));
-        if (causa) abrirEditarAcaoModal(abrirAcaoId, causa.id);
-      }
-    }
-
-    iniciar();
+    carregar();
   </script>
 </body>
 </html>
