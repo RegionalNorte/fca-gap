@@ -1,14 +1,14 @@
 const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
-const { condicaoUnidade } = require('../services/escopo');
+const { condicaoUnidade, unidadeNoEscopo } = require('../services/escopo');
 
 // colaborador vê só os fatos onde é responsável de alguma causa ou ação;
 // os demais papéis veem pela hierarquia de unidade (ver SPEC.md).
-async function condicaoVisibilidadeFato(usuario, alias, params) {
+async function condicaoVisibilidadeFato(usuario, aliasId, params) {
   if (usuario.papel === 'colaborador') {
     params.push(usuario.id);
-    return `${alias} IN (
+    return `${aliasId} IN (
       SELECT c.fato_id FROM causas c WHERE c.responsavel_id = $${params.length}
       UNION
       SELECT c.fato_id FROM causas c
@@ -18,7 +18,13 @@ async function condicaoVisibilidadeFato(usuario, alias, params) {
     )`;
   }
 
-  return condicaoUnidade(usuario, alias, params);
+  // bug corrigido: condicaoUnidade espera uma coluna/subselect de
+  // unidade_id, mas aqui estava recebendo o alias de f.id (o id do
+  // próprio fato) — a condição gerada comparava f.id com uma unidade_id
+  // e nunca batia com nada, deixando gestor_unidade/área/regional sem
+  // ver NENHUM fato na listagem (só colaborador, que usa outro caminho,
+  // funcionava)
+  return condicaoUnidade(usuario, 'f.unidade_id', params);
 }
 
 const listar = asyncHandler(async (req, res) => {
@@ -77,6 +83,14 @@ const buscarPorId = asyncHandler(async (req, res) => {
 
   const fato = rows[0];
   if (!fato) throw new AppError('Fato não encontrado', 404);
+
+  // gestor_unidade/área/regional só acessa fatos dentro da própria
+  // jurisdição — permitir() na rota só garante que a pessoa é "algum"
+  // gestor, não que esse fato específico é dela. Colaborador tem
+  // checagem própria (por atribuição) logo abaixo.
+  if (req.usuario.papel !== 'colaborador' && !(await unidadeNoEscopo(req.usuario, fato.unidade_id))) {
+    throw new AppError('Você não tem acesso a este fato', 403);
+  }
 
   const { rows: causas } = await pool.query(
     `SELECT c.id, c.descricao, c.responsavel_id, c.created_at,
@@ -144,6 +158,10 @@ const criar = asyncHandler(async (req, res) => {
     throw new AppError('Informe unidade_id e titulo', 400);
   }
 
+  if (!(await unidadeNoEscopo(req.usuario, unidade_id))) {
+    throw new AppError('Você não pode criar um fato fora da sua unidade/área/regional', 403);
+  }
+
   const { rows } = await pool.query(
     `INSERT INTO fatos (unidade_id, titulo, descricao, data_identificacao, criado_por)
      VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5)
@@ -159,6 +177,12 @@ const criar = asyncHandler(async (req, res) => {
 // recalculando a partir das ações, igual à trigger do banco faria).
 const atualizar = asyncHandler(async (req, res) => {
   const { titulo, descricao, data_identificacao, status } = req.body;
+
+  const { rows: atual } = await pool.query('SELECT unidade_id FROM fatos WHERE id = $1', [req.params.id]);
+  if (!atual[0]) throw new AppError('Fato não encontrado', 404);
+  if (!(await unidadeNoEscopo(req.usuario, atual[0].unidade_id))) {
+    throw new AppError('Você não tem acesso a este fato', 403);
+  }
 
   if (status && status !== 'cancelado' && status !== 'reabrir') {
     throw new AppError(
@@ -210,6 +234,12 @@ const atualizar = asyncHandler(async (req, res) => {
 });
 
 const remover = asyncHandler(async (req, res) => {
+  const { rows: atual } = await pool.query('SELECT unidade_id FROM fatos WHERE id = $1', [req.params.id]);
+  if (!atual[0]) throw new AppError('Fato não encontrado', 404);
+  if (!(await unidadeNoEscopo(req.usuario, atual[0].unidade_id))) {
+    throw new AppError('Você não tem acesso a este fato', 403);
+  }
+
   const { rowCount } = await pool.query('DELETE FROM fatos WHERE id = $1', [req.params.id]);
   if (!rowCount) throw new AppError('Fato não encontrado', 404);
   res.status(204).send();

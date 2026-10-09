@@ -1,7 +1,29 @@
 const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
-const { condicaoUnidade } = require('../services/escopo');
+const { condicaoUnidade, unidadeNoEscopo } = require('../services/escopo');
+
+// unidade do fato dono dessa causa — pra conferir se quem está criando
+// uma ação nela tem jurisdição sobre ela
+async function unidadeDaCausa(causaId) {
+  const { rows } = await pool.query(
+    `SELECT f.unidade_id FROM causas c JOIN fatos f ON f.id = c.fato_id WHERE c.id = $1`,
+    [causaId]
+  );
+  return rows[0] ? rows[0].unidade_id : null;
+}
+
+// unidade do fato dono da causa dessa ação — mesma ideia, pra editar/excluir
+async function unidadeDaAcao(acaoId) {
+  const { rows } = await pool.query(
+    `SELECT f.unidade_id FROM acoes a
+     JOIN causas c ON c.id = a.causa_id
+     JOIN fatos f ON f.id = c.fato_id
+     WHERE a.id = $1`,
+    [acaoId]
+  );
+  return rows[0] ? rows[0].unidade_id : null;
+}
 
 const SELECT_ACAO = `
   SELECT
@@ -78,6 +100,12 @@ const criar = asyncHandler(async (req, res) => {
     throw new AppError('Informe causa_id, descricao, inicio_previsto e final_previsto', 400);
   }
 
+  const unidadeId = await unidadeDaCausa(causa_id);
+  if (unidadeId === null) throw new AppError('Causa não encontrada', 404);
+  if (!(await unidadeNoEscopo(req.usuario, unidadeId))) {
+    throw new AppError('Você não tem acesso a esta causa', 403);
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -118,6 +146,12 @@ const atualizar = asyncHandler(async (req, res) => {
     // colaborador não redefine quem são os responsáveis, só executa a ação
     if (responsaveis !== undefined) {
       throw new AppError('Você não pode alterar os responsáveis desta ação', 403);
+    }
+  } else {
+    const unidadeId = await unidadeDaAcao(req.params.id);
+    if (unidadeId === null) throw new AppError('Ação não encontrada', 404);
+    if (!(await unidadeNoEscopo(req.usuario, unidadeId))) {
+      throw new AppError('Você não tem acesso a esta ação', 403);
     }
   }
 
@@ -170,6 +204,12 @@ const atualizar = asyncHandler(async (req, res) => {
 });
 
 const remover = asyncHandler(async (req, res) => {
+  const unidadeId = await unidadeDaAcao(req.params.id);
+  if (unidadeId === null) throw new AppError('Ação não encontrada', 404);
+  if (!(await unidadeNoEscopo(req.usuario, unidadeId))) {
+    throw new AppError('Você não tem acesso a esta ação', 403);
+  }
+
   const { rowCount } = await pool.query('DELETE FROM acoes WHERE id = $1', [req.params.id]);
   if (!rowCount) throw new AppError('Ação não encontrada', 404);
   res.status(204).send();

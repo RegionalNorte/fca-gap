@@ -56,4 +56,23 @@ async function condicaoUnidade(usuario, alias, params) {
   return '1=0';
 }
 
-module.exports = { resolverHierarquiaUnidade, condicaoUnidade };
+// true se o usuário (qualquer papel de gestão) tem jurisdição sobre essa
+// unidade — usado nos controllers pra barrar criar/editar/excluir
+// fato/causa/ação de fora do escopo de quem está pedindo (o permitir()
+// nas rotas só checa o papel, não a instância específica).
+async function unidadeNoEscopo(usuario, unidadeId) {
+  if (usuario.papel === 'admin') return true;
+  if (!unidadeId || !usuario.unidade_id) return false;
+  if (usuario.papel === 'gestor_unidade') return usuario.unidade_id === unidadeId;
+
+  const hierarquiaUsuario = await resolverHierarquiaUnidade(usuario.unidade_id);
+  const hierarquiaAlvo = await resolverHierarquiaUnidade(unidadeId);
+  if (!hierarquiaUsuario || !hierarquiaAlvo) return false;
+
+  if (usuario.papel === 'gestor_area') return hierarquiaUsuario.area_id === hierarquiaAlvo.area_id;
+  if (usuario.papel === 'gestor_regional') return hierarquiaUsuario.regional_id === hierarquiaAlvo.regional_id;
+
+  return false;
+}
+
+module.exports = { resolverHierarquiaUnidade, condicaoUnidade, unidadeNoEscopo };

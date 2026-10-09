@@ -1,6 +1,17 @@
 const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
+const { unidadeNoEscopo } = require('../services/escopo');
+
+// unidade do fato dono dessa causa — pra conferir se quem está mexendo
+// (criando, editando, excluindo) tem jurisdição sobre ela
+async function unidadeDaCausa(causaId) {
+  const { rows } = await pool.query(
+    `SELECT f.unidade_id FROM causas c JOIN fatos f ON f.id = c.fato_id WHERE c.id = $1`,
+    [causaId]
+  );
+  return rows[0] ? rows[0].unidade_id : null;
+}
 
 const SELECT_CAUSA = `
   SELECT
@@ -50,6 +61,12 @@ const criar = asyncHandler(async (req, res) => {
     throw new AppError('Informe fato_id e descricao', 400);
   }
 
+  const { rows: fatoRows } = await pool.query('SELECT unidade_id FROM fatos WHERE id = $1', [fato_id]);
+  if (!fatoRows[0]) throw new AppError('Fato não encontrado', 404);
+  if (!(await unidadeNoEscopo(req.usuario, fatoRows[0].unidade_id))) {
+    throw new AppError('Você não tem acesso a este fato', 403);
+  }
+
   const { rows } = await pool.query(
     'INSERT INTO causas (fato_id, descricao, responsavel_id) VALUES ($1, $2, $3) RETURNING id',
     [fato_id, descricao, responsavel_id || null]
@@ -65,6 +82,12 @@ const atualizar = asyncHandler(async (req, res) => {
     if (!atual[0]) throw new AppError('Causa não encontrada', 404);
     if (atual[0].responsavel_id !== req.usuario.id) {
       throw new AppError('Você só pode editar causas das quais é responsável', 403);
+    }
+  } else {
+    const unidadeId = await unidadeDaCausa(req.params.id);
+    if (unidadeId === null) throw new AppError('Causa não encontrada', 404);
+    if (!(await unidadeNoEscopo(req.usuario, unidadeId))) {
+      throw new AppError('Você não tem acesso a esta causa', 403);
     }
   }
 
@@ -97,6 +120,12 @@ const atualizar = asyncHandler(async (req, res) => {
 });
 
 const remover = asyncHandler(async (req, res) => {
+  const unidadeId = await unidadeDaCausa(req.params.id);
+  if (unidadeId === null) throw new AppError('Causa não encontrada', 404);
+  if (!(await unidadeNoEscopo(req.usuario, unidadeId))) {
+    throw new AppError('Você não tem acesso a esta causa', 403);
+  }
+
   const { rowCount } = await pool.query('DELETE FROM causas WHERE id = $1', [req.params.id]);
   if (!rowCount) throw new AppError('Causa não encontrada', 404);
   res.status(204).send();
