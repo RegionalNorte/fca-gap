@@ -629,13 +629,78 @@
 
     function acoesStatusFato(f) {
       if (!podeGerir) return '';
+      const editar = `<button type="button" class="link-action" id="btn-editar-fato">Editar fato</button>`;
       if (f.status === 'cancelado') {
         return `
+          ${editar}
           <button type="button" class="link-action" id="btn-reabrir">Reabrir fato</button>
           <button type="button" class="link-action link-action--danger" id="btn-excluir-fato">Excluir fato</button>
         `;
       }
-      return `<button type="button" class="link-action link-action--danger" id="btn-cancelar">Cancelar fato</button>`;
+      return `
+        ${editar}
+        <button type="button" class="link-action link-action--danger" id="btn-cancelar">Cancelar fato</button>
+      `;
+    }
+
+    function abrirEditarFatoModal(f) {
+      abrirModal({
+        titulo: 'Editar fato',
+        corpo: `
+          <form id="form-editar-fato" class="form-grid" style="max-width:none">
+            <div class="field">
+              <label for="ef-titulo-editor">Título</label>
+              ${corpoEditorRico('ef-titulo-editor', 'Descreva o fato…')}
+            </div>
+            <div class="field">
+              <label for="ef-descricao">Descrição</label>
+              <textarea id="ef-descricao">${escapeHtml(f.descricao || '')}</textarea>
+            </div>
+            <div class="field">
+              <label for="ef-data">Identificado em</label>
+              <input type="date" id="ef-data" value="${f.data_identificacao ? String(f.data_identificacao).slice(0, 10) : ''}" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">Salvar</button>
+              <button type="button" class="link-action" id="btn-cancelar-editar-fato">Cancelar</button>
+            </div>
+          </form>
+        `,
+      });
+
+      ativarEditorRico('ef-titulo-editor');
+      definirHtmlEditorRico('ef-titulo-editor', f.titulo);
+
+      document.getElementById('btn-cancelar-editar-fato').addEventListener('click', fecharModal);
+      document.getElementById('form-editar-fato').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const tituloTexto = textoPlanoEditorRico('ef-titulo-editor');
+        if (!tituloTexto) {
+          mostrarToast('Informe o título.', 'erro');
+          return;
+        }
+        if (tituloTexto.length > 300) {
+          mostrarToast('Título muito longo (máx. 300 caracteres).', 'erro');
+          return;
+        }
+
+        try {
+          await api(`/fatos/${fatoId}`, {
+            method: 'PATCH',
+            body: {
+              titulo: obterHtmlEditorRico('ef-titulo-editor'),
+              descricao: document.getElementById('ef-descricao').value.trim() || null,
+              data_identificacao: document.getElementById('ef-data').value || null,
+            },
+          });
+          fecharModal();
+          mostrarToast('Fato atualizado.');
+          await carregar();
+        } catch (err) {
+          erroApi(err);
+        }
+      });
     }
 
     async function carregar() {
@@ -673,9 +738,11 @@
           const btnCancelar = document.getElementById('btn-cancelar');
           const btnReabrir = document.getElementById('btn-reabrir');
           const btnExcluirFato = document.getElementById('btn-excluir-fato');
+          const btnEditarFato = document.getElementById('btn-editar-fato');
           if (btnCancelar) btnCancelar.addEventListener('click', () => mudarStatusFato('cancelado'));
           if (btnReabrir) btnReabrir.addEventListener('click', () => mudarStatusFato('reabrir'));
           if (btnExcluirFato) btnExcluirFato.addEventListener('click', excluirFato);
+          if (btnEditarFato) btnEditarFato.addEventListener('click', () => abrirEditarFatoModal(f));
         }
       } catch (err) {
         content.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
