@@ -71,7 +71,7 @@
           ? `iniciada ${formatarData(a.data_iniciada)} · em andamento`
           : 'ainda não iniciada';
       const vencida = a.prazo_vencido_sem_conclusao
-        || ((a.status === 'nao_iniciada' || a.status === 'em_andamento') && new Date(a.final_previsto) < new Date());
+        || ((a.status === 'nao_iniciada' || a.status === 'em_andamento') && a.final_previsto < hojeISO());
 
       return `
         <div class="acao-card">

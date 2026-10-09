@@ -44,10 +44,23 @@ function statusVencidoHtml(texto) {
   return `<span class="alerta-vencido">${texto}</span>`;
 }
 
+// reformata a string "AAAA-MM-DD" direto, sem passar por new Date() —
+// um Date interpreta "AAAA-MM-DD" como meia-noite UTC e depois
+// converte pro fuso do navegador na hora de exibir, podendo mostrar o
+// dia anterior dependendo do fuso. Como a data já vem nesse formato do
+// servidor (ver src/db/pool.js), só precisamos reordenar os pedaços.
+// data de "hoje" no fuso do navegador, como string "AAAA-MM-DD" — pra
+// comparar com datas vindas do servidor sem passar por new Date(iso),
+// que erra o dia dependendo do fuso (ver formatarData acima)
+function hojeISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function formatarData(iso) {
   if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const [ano, mes, dia] = String(iso).slice(0, 10).split('-');
+  return `${dia}/${mes}/${ano}`;
 }
 
 function iniciais(nome) {
