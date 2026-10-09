@@ -14,6 +14,17 @@
   <script src="/js/layout.js"></script>
   <script>
     exigirAuth();
+
+    // Gestão > Usuários é só do admin (ver/editar/excluir usuário é
+    // diferente de escolher um responsável dentro de uma causa/ação, que
+    // qualquer gestor pode) — gestor_unidade/área/regional não tem link
+    // pra essa tela no menu, mas se entrar direto pela URL, manda embora
+    // em vez de mostrar uma lista com botões que vão dar 403.
+    if (getUsuario().papel !== 'admin') {
+      location.href = '/fatos.html';
+      throw new Error('redirecionando');
+    }
+
     const content = montarLayout({
       ativo: 'usuarios',
       titulo: 'Usuários',

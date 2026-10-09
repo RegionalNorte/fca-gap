@@ -15,6 +15,14 @@
   <script>
     exigirAuth();
 
+    // Gestão > Áreas é só do admin — sem link no menu pros outros gestores,
+    // mas se entrar direto pela URL, manda embora em vez de mostrar uma
+    // lista com botões que vão dar 403.
+    if (getUsuario().papel !== 'admin') {
+      location.href = '/fatos.html';
+      throw new Error('redirecionando');
+    }
+
     const content = montarLayout({
       ativo: 'areas',
       titulo: 'Áreas',

@@ -1,18 +1,25 @@
 const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
+const { condicaoUnidade } = require('../services/escopo');
 
+// escopado por jurisdição — é o que alimenta o seletor de unidade ao
+// criar um fato: gestor_unidade só via a própria, gestor_area só as da
+// área dele etc. (admin e colaborador continuam vendo tudo/nada igual
+// condicaoUnidade já decide pros outros endpoints)
 const listar = asyncHandler(async (req, res) => {
   const params = [];
-  let sql = 'SELECT * FROM unidades';
+  const condicoes = [await condicaoUnidade(req.usuario, 'id', params)];
 
   if (req.query.area_id) {
     params.push(req.query.area_id);
-    sql += ` WHERE area_id = $${params.length}`;
+    condicoes.push(`area_id = $${params.length}`);
   }
 
-  sql += ' ORDER BY nome';
-  const { rows } = await pool.query(sql, params);
+  const { rows } = await pool.query(
+    `SELECT * FROM unidades WHERE ${condicoes.join(' AND ')} ORDER BY nome`,
+    params
+  );
   res.json(rows);
 });
 
