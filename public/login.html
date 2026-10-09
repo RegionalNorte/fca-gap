@@ -29,6 +29,9 @@
           </div>
           <button type="submit" class="btn btn--primary" id="btn-entrar" style="width:100%; justify-content:center">Entrar</button>
         </form>
+        <p style="margin-top:14px; text-align:center">
+          <button type="button" class="link-action" id="btn-esqueci-senha">Esqueci minha senha</button>
+        </p>
       </div>
 
       <div class="login-foot">Primeiro acesso? Use o link de convite enviado por e-mail.</div>
@@ -39,6 +42,47 @@
   <script src="/js/api.js"></script>
   <script src="/js/utils.js"></script>
   <script>
+    function abrirEsqueciSenhaModal() {
+      abrirModal({
+        titulo: 'Esqueci minha senha',
+        corpo: `
+          <form id="form-esqueci" class="form-grid" novalidate>
+            <p style="color:var(--muted); font-size:14px; margin-bottom:4px">
+              Informe seu e-mail de acesso. Se ele estiver cadastrado, enviaremos um link para você criar uma nova senha.
+            </p>
+            <div class="field">
+              <label for="es-email">E-mail</label>
+              <input type="email" id="es-email" required autocomplete="username" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary" id="btn-enviar-reset">Enviar link</button>
+              <button type="button" class="link-action" id="btn-cancelar-reset">Cancelar</button>
+            </div>
+          </form>
+        `,
+      });
+
+      document.getElementById('btn-cancelar-reset').addEventListener('click', fecharModal);
+      document.getElementById('form-esqueci').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('btn-enviar-reset');
+        btn.disabled = true;
+        btn.textContent = 'Enviando…';
+        try {
+          const email = document.getElementById('es-email').value.trim();
+          const { mensagem } = await api('/auth/esqueci-senha', { method: 'POST', body: { email } });
+          fecharModal();
+          mostrarToast(mensagem);
+        } catch (err) {
+          erroApi(err);
+          btn.disabled = false;
+          btn.textContent = 'Enviar link';
+        }
+      });
+    }
+
+    document.getElementById('btn-esqueci-senha').addEventListener('click', abrirEsqueciSenhaModal);
+
     // colaborador não tem dashboard no menu — manda direto pra Fatos
     function destinoAposLogin(usuario) {
       return usuario.papel === 'colaborador' ? '/fatos.html' : '/index.html';

@@ -65,6 +65,23 @@ async function enviarConvite({ nome, email, token }) {
   });
 }
 
+async function enviarRedefinicaoSenha({ nome, email, token }) {
+  const link = `${baseUrl}/redefinir-senha.html?token=${token}`;
+  const saudacao = nome ? `Olá, ${nome}.` : 'Olá.';
+
+  await enviar({
+    para: email,
+    assunto: 'Redefinição de senha — FCA GAP',
+    texto: `${saudacao}\n\nRecebemos um pedido para redefinir sua senha no FCA GAP.\n\nClique no link abaixo para criar uma nova senha (válido por 1 hora):\n${link}\n\nSe não foi você quem pediu, pode ignorar este e-mail — sua senha atual continua valendo.`,
+    html: `
+      <p>${saudacao}</p>
+      <p>Recebemos um pedido para redefinir sua senha no FCA GAP.</p>
+      <p><a href="${link}">Criar nova senha</a></p>
+      <p style="color:#6b7280; font-size:13px">Este link é válido por 1 hora. Se não foi você quem pediu, pode ignorar este e-mail — sua senha atual continua valendo.</p>
+    `,
+  });
+}
+
 async function enviarAvisoAtribuicao({ nome, email, contexto }) {
   const saudacao = nome ? `Olá, ${nome}.` : 'Olá.';
   const link = `${baseUrl}/login.html`;
@@ -81,4 +98,4 @@ async function enviarAvisoAtribuicao({ nome, email, contexto }) {
   });
 }
 
-module.exports = { enviarConvite, enviarAvisoAtribuicao };
+module.exports = { enviarConvite, enviarAvisoAtribuicao, enviarRedefinicaoSenha };

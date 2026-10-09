@@ -8,6 +8,9 @@ const { autenticar } = require('../middlewares/auth');
 router.post('/login', controller.login);
 router.get('/convites/:token', controller.verConvite);
 router.post('/convites/:token/aceitar', controller.aceitarConvite);
+router.post('/esqueci-senha', controller.esqueciSenha);
+router.get('/redefinir-senha/:token', controller.verTokenRedefinicao);
+router.post('/redefinir-senha/:token', controller.redefinirSenha);
 
 router.get('/me', autenticar, controller.me);
 

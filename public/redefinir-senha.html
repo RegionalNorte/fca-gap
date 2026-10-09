@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Redefinir senha — FCA GAP</title>
+<link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-box">
+      <div class="brand">
+        <div class="name">FCA GAP</div>
+        <div class="sub">Crie uma nova senha para acessar.</div>
+      </div>
+
+      <div class="login-card" id="caixa">
+        <p style="color:var(--muted); font-size:14px">Verificando link…</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script>
+    const token = qs('token');
+    const caixa = document.getElementById('caixa');
+
+    function mostrarErro(msg) {
+      caixa.innerHTML = `
+        <h2 style="font-size:18px">Link inválido</h2>
+        <p style="color:var(--muted); font-size:14px; margin-top:6px">${escapeHtml(msg)}</p>
+        <p style="margin-top:12px"><a href="/login.html">Voltar para o login</a></p>
+      `;
+    }
+
+    if (!token) {
+      mostrarErro('Nenhum token de redefinição foi informado.');
+    } else {
+      api(`/auth/redefinir-senha/${token}`)
+        .then(({ usuario }) => {
+          caixa.innerHTML = `
+            <form id="form-senha" class="form-grid" novalidate>
+              <div class="field">
+                <label for="senha">Nova senha</label>
+                <input type="password" id="senha" minlength="6" required autocomplete="new-password" />
+                <p class="hint">Mínimo de 6 caracteres. Redefinindo senha de ${escapeHtml(usuario.email)}.</p>
+              </div>
+              <div class="field" id="campo-erro" style="display:none"><p class="error-msg" id="texto-erro"></p></div>
+              <button type="submit" class="btn btn--primary" id="btn-confirmar" style="width:100%; justify-content:center">Criar nova senha e entrar</button>
+            </form>
+          `;
+
+          document.getElementById('form-senha').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btn-confirmar');
+            const campoErro = document.getElementById('campo-erro');
+            campoErro.style.display = 'none';
+            btn.disabled = true;
+            btn.textContent = 'Salvando…';
+
+            try {
+              const senha = document.getElementById('senha').value;
+              const resp = await api(`/auth/redefinir-senha/${token}`, { method: 'POST', body: { senha } });
+              setSessao(resp.token, resp.usuario);
+              location.href = '/index.html';
+            } catch (err) {
+              document.getElementById('texto-erro').textContent = err.message;
+              campoErro.style.display = 'block';
+              btn.disabled = false;
+              btn.textContent = 'Criar nova senha e entrar';
+            }
+          });
+        })
+        .catch((err) => mostrarErro(err.message));
+    }
+  </script>
+</body>
+</html>
