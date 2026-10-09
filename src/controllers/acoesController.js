@@ -197,6 +197,7 @@ const prazos = asyncHandler(async (req, res) => {
   );
 
   const atrasadas = rows.filter((a) => a.prazo_vencido_sem_conclusao);
+  const vence_hoje = rows.filter((a) => !a.prazo_vencido_sem_conclusao && a.dias_para_vencer === 0);
   const proximos_7_dias = rows.filter(
     (a) => !a.prazo_vencido_sem_conclusao && a.dias_para_vencer >= 0 && a.dias_para_vencer <= 7
   );
@@ -204,7 +205,7 @@ const prazos = asyncHandler(async (req, res) => {
     (a) => !atrasadas.includes(a) && !proximos_7_dias.includes(a)
   );
 
-  res.json({ atrasadas, proximos_7_dias, demais });
+  res.json({ vence_hoje, atrasadas, proximos_7_dias, demais });
 });
 
 module.exports = { listar, buscarPorId, criar, atualizar, remover, prazos };

@@ -16,10 +16,15 @@
     exigirAuth();
     const content = montarLayout({ ativo: 'prazos', titulo: 'Painel de prazos', breadcrumb: ['Regional Norte'] });
 
+    let abas = [];
+    let abaAtiva = 'hoje';
+
     function linhaPrazo(a, destaque) {
       const prazoHtml = destaque === 'atraso'
         ? statusVencidoHtml(`venceu há ${Math.abs(a.dias_para_vencer)} dia${Math.abs(a.dias_para_vencer) === 1 ? '' : 's'}`)
-        : `<span class="mono" style="font-size:13px">${a.dias_para_vencer} dia${a.dias_para_vencer === 1 ? '' : 's'}</span>`;
+        : destaque === 'hoje'
+          ? statusVencidoHtml('vence hoje')
+          : `<span class="mono" style="font-size:13px">${a.dias_para_vencer} dia${a.dias_para_vencer === 1 ? '' : 's'}</span>`;
 
       return `
         <tr>
@@ -43,25 +48,69 @@
       `;
     }
 
+    function rotuloAba(aba) {
+      const emAlerta = aba.alerta && aba.lista.length > 0;
+      const classeAlerta = emAlerta ? (aba.chave === 'hoje' ? ' prazos-aba-contagem--hoje' : ' prazos-aba-contagem--alerta') : '';
+      return `
+        <button type="button" class="prazos-aba ${aba.chave === abaAtiva ? 'ativa' : ''}" role="tab"
+          aria-selected="${aba.chave === abaAtiva}" tabindex="${aba.chave === abaAtiva ? '0' : '-1'}" data-aba="${aba.chave}">
+          ${aba.rotulo}
+          <span class="prazos-aba-contagem${classeAlerta}">${aba.lista.length}</span>
+        </button>
+      `;
+    }
+
+    function renderConteudo() {
+      const atual = abas.find((a) => a.chave === abaAtiva);
+      document.getElementById('prazos-tabela').innerHTML = tabela(atual.lista, atual.destaque);
+    }
+
+    function selecionarAba(chave) {
+      abaAtiva = chave;
+      document.querySelectorAll('.prazos-aba').forEach((btn) => {
+        const ativa = btn.dataset.aba === chave;
+        btn.classList.toggle('ativa', ativa);
+        btn.setAttribute('aria-selected', String(ativa));
+        btn.tabIndex = ativa ? 0 : -1;
+      });
+      renderConteudo();
+    }
+
+    function ativarAbas() {
+      const botoes = [...document.querySelectorAll('.prazos-aba')];
+      botoes.forEach((btn, i) => {
+        btn.addEventListener('click', () => selecionarAba(btn.dataset.aba));
+        btn.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowRight') botoes[(i + 1) % botoes.length].focus();
+          if (e.key === 'ArrowLeft') botoes[(i - 1 + botoes.length) % botoes.length].focus();
+        });
+      });
+    }
+
     async function carregar() {
       content.innerHTML = '<div class="empty-state">Carregando…</div>';
       try {
-        const { atrasadas, proximos_7_dias, demais } = await api('/acoes/prazos');
+        const { vence_hoje, atrasadas, proximos_7_dias, demais } = await api('/acoes/prazos');
+
+        abas = [
+          { chave: 'hoje', rotulo: 'Vence hoje', lista: vence_hoje, destaque: 'hoje', alerta: true },
+          { chave: 'atrasadas', rotulo: 'Atrasadas', lista: atrasadas, destaque: 'atraso', alerta: true },
+          { chave: 'proximos', rotulo: 'Próximos 7 dias', lista: proximos_7_dias, destaque: null },
+          { chave: 'demais', rotulo: 'Demais em aberto', lista: demais, destaque: null },
+        ];
+        // "vence hoje" marcada por padrão — o que precisa de atenção agora
+        abaAtiva = 'hoje';
 
         content.innerHTML = `
           <div style="display:flex; flex-direction:column; min-height:0; flex:1;">
-            <div class="section-label" style="margin-bottom:10px; flex:none">Atrasadas (${atrasadas.length})</div>
-            <div class="panel panel-lista" style="min-height:0;">${tabela(atrasadas, 'atraso')}</div>
-          </div>
-          <div style="display:flex; flex-direction:column; min-height:0; flex:1;">
-            <div class="section-label" style="margin-bottom:10px; flex:none">Próximos 7 dias (${proximos_7_dias.length})</div>
-            <div class="panel panel-lista" style="min-height:0;">${tabela(proximos_7_dias)}</div>
-          </div>
-          <div style="display:flex; flex-direction:column; min-height:0; flex:1;">
-            <div class="section-label" style="margin-bottom:10px; flex:none">Demais ações em aberto (${demais.length})</div>
-            <div class="panel panel-lista" style="min-height:0;">${tabela(demais)}</div>
+            <div class="prazos-abas" role="tablist" aria-label="Categoria de prazos">
+              ${abas.map(rotuloAba).join('')}
+            </div>
+            <div class="panel panel-lista" id="prazos-tabela" style="min-height:0;"></div>
           </div>
         `;
+        renderConteudo();
+        ativarAbas();
       } catch (err) {
         content.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
       }

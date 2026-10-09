@@ -471,6 +471,62 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
 }
+
+/* ---------- guias de prazos (estilo abas de planilha) ---------- */
+/* a guia ativa "funde" com o painel da tabela logo abaixo — mesmo
+   truque das abas de pasta de trabalho do Excel: sobe 1px por cima da
+   borda do painel e troca a cor da borda de baixo pra branco, fechando
+   a emenda. As inativas ficam com fundo neutro, visivelmente "atrás". */
+.prazos-abas {
+  display: flex;
+  gap: 4px;
+  padding-left: 4px;
+  flex: none;
+}
+
+.prazos-aba {
+  appearance: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-bottom-color: transparent;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--border-soft);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 9px 16px;
+  margin-bottom: -1px;
+}
+
+.prazos-aba:hover:not(.ativa) { background: var(--surface); color: var(--ink); }
+.prazos-aba:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.prazos-aba.ativa {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--surface);
+}
+
+.prazos-aba-contagem {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--paper);
+  border-radius: 999px;
+  padding: 1px 7px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.prazos-aba.ativa .prazos-aba-contagem { background: var(--border-soft); }
+
+.prazos-aba-contagem--alerta { color: var(--status-atrasada-fg); background: var(--status-atrasada-bg); }
+.prazos-aba-contagem--hoje { color: var(--warning); background: #fdf3e4; }
 .panel-header h2 { font-size: 15px; }
 .panel-header .count { color: var(--faint); font-size: 13px; }
 
