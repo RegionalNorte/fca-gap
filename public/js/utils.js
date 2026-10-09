@@ -139,6 +139,9 @@ const PALETA_EDITOR_RICO = [
 function corpoEditorRico(id, placeholder = '') {
   return `
     <div class="editor-rico-toolbar">
+      <button type="button" class="editor-rico-estilo" data-estilo="bold" data-for="${id}" title="Negrito"><b>B</b></button>
+      <button type="button" class="editor-rico-estilo" data-estilo="italic" data-for="${id}" title="Itálico"><i>I</i></button>
+      <span class="editor-rico-divisor"></span>
       ${PALETA_EDITOR_RICO.map(
         (p) => `<button type="button" class="editor-rico-cor" data-cor="${p.cor}" data-for="${id}" title="${escapeHtml(p.nome)}" style="background:${p.cor}"></button>`
       ).join('')}
@@ -187,8 +190,25 @@ function ativarEditorRico(id) {
     document.execCommand('insertText', false, texto);
   });
 
+  // impede que o mousedown no botão tire o foco do editor (o que colapsa
+  // a seleção antes do click chegar a rodar)
+  document.querySelectorAll(`.editor-rico-toolbar [data-for="${id}"]`).forEach((btn) => {
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+  });
+
   document.querySelectorAll(`.editor-rico-cor[data-for="${id}"]`).forEach((btn) => {
     btn.addEventListener('click', () => aplicarCorEditorRico(editor, btn.dataset.cor));
+  });
+
+  document.querySelectorAll(`.editor-rico-estilo[data-for="${id}"]`).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (window.getSelection().isCollapsed) {
+        mostrarToast('Selecione o texto que quer formatar.', 'erro');
+        return;
+      }
+      editor.focus();
+      document.execCommand(btn.dataset.estilo);
+    });
   });
 }
 

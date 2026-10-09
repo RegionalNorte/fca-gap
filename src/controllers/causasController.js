@@ -2,6 +2,7 @@ const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { unidadeNoEscopo } = require('../services/escopo');
+const { sanitizarTextoRico, LIMITE_HTML } = require('../utils/richText');
 
 // unidade do fato dono dessa causa — pra conferir se quem está mexendo
 // (criando, editando, excluindo) tem jurisdição sobre ela
@@ -61,6 +62,11 @@ const criar = asyncHandler(async (req, res) => {
     throw new AppError('Informe fato_id e descricao', 400);
   }
 
+  const descricaoSegura = sanitizarTextoRico(descricao);
+  if (descricaoSegura.length > LIMITE_HTML) {
+    throw new AppError('Descrição muito longa', 400);
+  }
+
   const { rows: fatoRows } = await pool.query('SELECT unidade_id FROM fatos WHERE id = $1', [fato_id]);
   if (!fatoRows[0]) throw new AppError('Fato não encontrado', 404);
   if (!(await unidadeNoEscopo(req.usuario, fatoRows[0].unidade_id))) {
@@ -69,7 +75,7 @@ const criar = asyncHandler(async (req, res) => {
 
   const { rows } = await pool.query(
     'INSERT INTO causas (fato_id, descricao, responsavel_id) VALUES ($1, $2, $3) RETURNING id',
-    [fato_id, descricao, responsavel_id || null]
+    [fato_id, descricaoSegura, responsavel_id || null]
   );
 
   const { rows: completo } = await pool.query(`${SELECT_CAUSA} WHERE c.id = $1`, [rows[0].id]);
@@ -98,8 +104,12 @@ const atualizar = asyncHandler(async (req, res) => {
   const campos = [];
   const valores = [];
   if (req.body.descricao !== undefined) {
+    const descricaoSegura = sanitizarTextoRico(req.body.descricao);
+    if (descricaoSegura && descricaoSegura.length > LIMITE_HTML) {
+      throw new AppError('Descrição muito longa', 400);
+    }
     campos.push(`descricao = $${campos.length + 1}`);
-    valores.push(req.body.descricao);
+    valores.push(descricaoSegura);
   }
   if (req.body.responsavel_id !== undefined) {
     campos.push(`responsavel_id = $${campos.length + 1}`);

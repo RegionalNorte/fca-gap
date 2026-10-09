@@ -112,7 +112,7 @@
 
       return `
         <div class="acao-card">
-          <div class="descricao">${escapeHtml(a.descricao)}</div>
+          <div class="descricao">${tituloClampHtml(a.descricao, a.id)}</div>
           ${vencida ? '<div class="acao-card-alerta">Prazo vencido sem conclusão</div>' : ''}
           <div class="acao-card-datas">
             <div>
@@ -146,7 +146,7 @@
         <div class="causa-block" data-causa="${c.id}">
           <div class="causa-header">
             <div>
-              <div class="descricao">${escapeHtml(c.descricao)}</div>
+              <div class="descricao">${tituloClampHtml(c.descricao, c.id)}</div>
               <div class="meta">Responsável pela causa: ${responsavel}</div>
             </div>
             <div class="causa-header-actions">
@@ -303,6 +303,7 @@
 
     function corpoModalAcoes(c) {
       return `
+        <div class="descricao" style="margin-bottom:14px">${tituloClampHtml(c.descricao, `modal-${c.id}`)}</div>
         <div class="modal-acoes-list">
           ${c.acoes.length === 0 ? '<div class="empty-state" style="padding:12px 0">Nenhuma ação cadastrada.</div>' : c.acoes.map((a) => acaoCard(a, c.id)).join('')}
         </div>
@@ -314,11 +315,13 @@
       const c = fatoCarregado.causas.find((x) => x.id === causaId);
       if (!c) return;
       abrirModal({
-        titulo: c.descricao,
+        titulo: 'Ações da causa',
         meta: `Responsável pela causa: ${escapeHtml(c.responsavel_nome || 'sem responsável')}`,
         corpo: corpoModalAcoes(c),
         largura: 'lg',
       });
+      ativarTituloVerMais(`modal-${c.id}`, c.descricao);
+      c.acoes.forEach((a) => ativarTituloVerMais(a.id, a.descricao));
     }
 
     async function abrirCriarCausaModal() {
@@ -329,8 +332,8 @@
         corpo: `
           <form id="modal-form-causa" class="form-grid" style="max-width:none">
             <div class="field">
-              <label for="modal-c-descricao">Descrição</label>
-              <textarea id="modal-c-descricao" required></textarea>
+              <label for="modal-c-descricao-editor">Descrição</label>
+              ${corpoEditorRico('modal-c-descricao-editor', 'Descreva a causa…')}
             </div>
             <div class="field">
               <label>Responsável</label>
@@ -346,6 +349,7 @@
         `,
       });
 
+      ativarEditorRico('modal-c-descricao-editor');
       ativarBuscaResponsavel('modal-c', usuario.id);
 
       document.getElementById('modal-c-cancelar').addEventListener('click', fecharModal);
@@ -357,7 +361,12 @@
 
       document.getElementById('modal-form-causa').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const descricao = document.getElementById('modal-c-descricao').value.trim();
+        const descricaoTexto = textoPlanoEditorRico('modal-c-descricao-editor');
+        if (!descricaoTexto) {
+          mostrarToast('Informe a descrição.', 'erro');
+          return;
+        }
+        const descricao = obterHtmlEditorRico('modal-c-descricao-editor');
         const responsavel_id = document.getElementById('modal-c-responsavel').value || null;
         try {
           await api('/causas', { method: 'POST', body: { fato_id: fatoId, descricao, responsavel_id } });
@@ -386,8 +395,8 @@
         corpo: `
           <form id="modal-form-causa" class="form-grid" style="max-width:none">
             <div class="field">
-              <label for="modal-c-descricao">Descrição</label>
-              <textarea id="modal-c-descricao" required>${escapeHtml(c.descricao)}</textarea>
+              <label for="modal-c-descricao-editor">Descrição</label>
+              ${corpoEditorRico('modal-c-descricao-editor', 'Descreva a causa…')}
             </div>
             <div class="field">
               <label>Responsável</label>
@@ -403,6 +412,9 @@
         `,
       });
 
+      ativarEditorRico('modal-c-descricao-editor');
+      definirHtmlEditorRico('modal-c-descricao-editor', c.descricao);
+
       document.getElementById('modal-c-cancelar').addEventListener('click', fecharModal);
 
       if (podeGerir) {
@@ -416,7 +428,12 @@
 
       document.getElementById('modal-form-causa').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const descricao = document.getElementById('modal-c-descricao').value.trim();
+        const descricaoTexto = textoPlanoEditorRico('modal-c-descricao-editor');
+        if (!descricaoTexto) {
+          mostrarToast('Informe a descrição.', 'erro');
+          return;
+        }
+        const descricao = obterHtmlEditorRico('modal-c-descricao-editor');
         const respEl = document.getElementById('modal-c-responsavel');
         const responsavel_id = respEl ? (respEl.value || null) : undefined;
         try {
@@ -455,8 +472,8 @@
         corpo: `
           <form id="modal-form-acao" class="form-grid" style="max-width:none">
             <div class="field">
-              <label for="modal-a-descricao">Descrição</label>
-              <textarea id="modal-a-descricao" required></textarea>
+              <label for="modal-a-descricao-editor">Descrição</label>
+              ${corpoEditorRico('modal-a-descricao-editor', 'Descreva a ação…')}
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
               <div class="field">
@@ -487,6 +504,7 @@
         largura: 'lg',
       });
 
+      ativarEditorRico('modal-a-descricao-editor');
       document.getElementById('modal-a-cancelar').addEventListener('click', () => abrirAcoesModal(causaId));
 
       ativarBuscaChecklist('modal-a');
@@ -497,9 +515,14 @@
 
       document.getElementById('modal-form-acao').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const descricaoTexto = textoPlanoEditorRico('modal-a-descricao-editor');
+        if (!descricaoTexto) {
+          mostrarToast('Informe a descrição.', 'erro');
+          return;
+        }
         const body = {
           causa_id: causaId,
-          descricao: document.getElementById('modal-a-descricao').value.trim(),
+          descricao: obterHtmlEditorRico('modal-a-descricao-editor'),
           inicio_previsto: document.getElementById('modal-a-inicio').value,
           final_previsto: document.getElementById('modal-a-final').value,
           evidencia: document.getElementById('modal-a-evidencia').value.trim() || null,
@@ -539,8 +562,8 @@
           <div>${statusAcaoHtml(a.status)} <span style="font-size:12px; color:var(--faint); margin-left:6px">— calculado automaticamente a partir das datas</span></div>
           <form id="modal-form-acao" class="form-grid" style="max-width:none">
             <div class="field">
-              <label for="modal-a-descricao">Descrição</label>
-              <textarea id="modal-a-descricao" required>${escapeHtml(a.descricao)}</textarea>
+              <label for="modal-a-descricao-editor">Descrição</label>
+              ${corpoEditorRico('modal-a-descricao-editor', 'Descreva a ação…')}
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
               <div class="field">
@@ -580,6 +603,8 @@
         largura: 'lg',
       });
 
+      ativarEditorRico('modal-a-descricao-editor');
+      definirHtmlEditorRico('modal-a-descricao-editor', a.descricao);
       document.getElementById('modal-a-cancelar').addEventListener('click', () => abrirAcoesModal(causaId));
 
       if (podeGerir) {
@@ -592,8 +617,13 @@
 
       document.getElementById('modal-form-acao').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const descricaoTexto = textoPlanoEditorRico('modal-a-descricao-editor');
+        if (!descricaoTexto) {
+          mostrarToast('Informe a descrição.', 'erro');
+          return;
+        }
         const body = {
-          descricao: document.getElementById('modal-a-descricao').value.trim(),
+          descricao: obterHtmlEditorRico('modal-a-descricao-editor'),
           inicio_previsto: document.getElementById('modal-a-inicio').value,
           final_previsto: document.getElementById('modal-a-final').value,
           data_iniciada: document.getElementById('modal-a-iniciada').value || null,
@@ -744,6 +774,7 @@
           if (btnExcluirFato) btnExcluirFato.addEventListener('click', excluirFato);
           if (btnEditarFato) btnEditarFato.addEventListener('click', () => abrirEditarFatoModal(f));
         }
+        requestAnimationFrame(() => f.causas.forEach((c) => ativarTituloVerMais(c.id, c.descricao)));
       } catch (err) {
         content.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
       }

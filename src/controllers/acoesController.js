@@ -2,6 +2,7 @@ const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { condicaoUnidade, unidadeNoEscopo } = require('../services/escopo');
+const { sanitizarTextoRico, LIMITE_HTML } = require('../utils/richText');
 
 // unidade do fato dono dessa causa — pra conferir se quem está criando
 // uma ação nela tem jurisdição sobre ela
@@ -100,6 +101,11 @@ const criar = asyncHandler(async (req, res) => {
     throw new AppError('Informe causa_id, descricao, inicio_previsto e final_previsto', 400);
   }
 
+  const descricaoSegura = sanitizarTextoRico(descricao);
+  if (descricaoSegura.length > LIMITE_HTML) {
+    throw new AppError('Descrição muito longa', 400);
+  }
+
   const unidadeId = await unidadeDaCausa(causa_id);
   if (unidadeId === null) throw new AppError('Causa não encontrada', 404);
   if (!(await unidadeNoEscopo(req.usuario, unidadeId))) {
@@ -114,7 +120,7 @@ const criar = asyncHandler(async (req, res) => {
       `INSERT INTO acoes (causa_id, descricao, inicio_previsto, final_previsto, evidencia)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [causa_id, descricao, inicio_previsto, final_previsto, evidencia || null]
+      [causa_id, descricaoSegura, inicio_previsto, final_previsto, evidencia || null]
     );
 
     await substituirResponsaveis(client, rows[0].id, responsaveis);
@@ -152,6 +158,13 @@ const atualizar = asyncHandler(async (req, res) => {
     if (unidadeId === null) throw new AppError('Ação não encontrada', 404);
     if (!(await unidadeNoEscopo(req.usuario, unidadeId))) {
       throw new AppError('Você não tem acesso a esta ação', 403);
+    }
+  }
+
+  if (req.body.descricao !== undefined && req.body.descricao !== null) {
+    req.body.descricao = sanitizarTextoRico(req.body.descricao);
+    if (req.body.descricao.length > LIMITE_HTML) {
+      throw new AppError('Descrição muito longa', 400);
     }
   }
 

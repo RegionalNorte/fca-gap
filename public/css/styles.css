@@ -429,7 +429,23 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 
 /* ---------- editor de texto rico (título do fato) ---------- */
 
-.editor-rico-toolbar { display: flex; gap: 7px; margin-bottom: 7px; }
+.editor-rico-toolbar { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+
+.editor-rico-estilo {
+  width: 24px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.editor-rico-estilo:hover { border-color: var(--accent); color: var(--accent); }
+
+.editor-rico-divisor { width: 1px; height: 18px; background: var(--border); }
 
 .editor-rico-cor {
   width: 20px;

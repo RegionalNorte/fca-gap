@@ -31,6 +31,13 @@ function sanitizarTextoRico(bruto) {
 
   seguro = seguro.replace(/&lt;br\s*\/?&gt;/gi, '<br>');
   seguro = seguro.replace(/&lt;\/span&gt;/gi, '</span>');
+  // negrito/itálico: Chrome gera <b>/<i> com execCommand por padrão, mas
+  // tolera <strong>/<em> também (outro navegador ou styleWithCSS ligado)
+  // — normaliza os dois pro mesmo par de tags na hora de guardar.
+  seguro = seguro.replace(/&lt;(b|strong)&gt;/gi, '<b>');
+  seguro = seguro.replace(/&lt;\/(b|strong)&gt;/gi, '</b>');
+  seguro = seguro.replace(/&lt;(i|em)&gt;/gi, '<i>');
+  seguro = seguro.replace(/&lt;\/(i|em)&gt;/gi, '</i>');
   seguro = seguro.replace(
     /&lt;span style="color:\s*(#[0-9a-fA-F]{6}|rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\))\s*;?"&gt;/gi,
     (m, cor) => {
