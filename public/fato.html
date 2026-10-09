@@ -630,7 +630,10 @@
     function acoesStatusFato(f) {
       if (!podeGerir) return '';
       if (f.status === 'cancelado') {
-        return `<button type="button" class="link-action" id="btn-reabrir">Reabrir fato</button>`;
+        return `
+          <button type="button" class="link-action" id="btn-reabrir">Reabrir fato</button>
+          <button type="button" class="link-action link-action--danger" id="btn-excluir-fato">Excluir fato</button>
+        `;
       }
       return `<button type="button" class="link-action link-action--danger" id="btn-cancelar">Cancelar fato</button>`;
     }
@@ -669,8 +672,10 @@
         if (podeGerir) {
           const btnCancelar = document.getElementById('btn-cancelar');
           const btnReabrir = document.getElementById('btn-reabrir');
+          const btnExcluirFato = document.getElementById('btn-excluir-fato');
           if (btnCancelar) btnCancelar.addEventListener('click', () => mudarStatusFato('cancelado'));
           if (btnReabrir) btnReabrir.addEventListener('click', () => mudarStatusFato('reabrir'));
+          if (btnExcluirFato) btnExcluirFato.addEventListener('click', excluirFato);
         }
       } catch (err) {
         content.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
@@ -681,6 +686,17 @@
       try {
         await api(`/fatos/${fatoId}`, { method: 'PATCH', body: { status } });
         await carregar();
+      } catch (err) {
+        erroApi(err);
+      }
+    }
+
+    async function excluirFato() {
+      if (!confirm('Excluir este fato e todas as suas causas/ações? Essa ação não pode ser desfeita.')) return;
+      try {
+        await api(`/fatos/${fatoId}`, { method: 'DELETE' });
+        mostrarToast('Fato excluído.');
+        location.href = '/fatos.html';
       } catch (err) {
         erroApi(err);
       }
