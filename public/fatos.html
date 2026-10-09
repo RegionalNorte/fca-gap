@@ -64,6 +64,10 @@
               <select id="nf-unidade" required><option value="">Selecione…</option>${options}</select>
             </div>
             <div class="field">
+              <label for="nf-categoria">Categoria</label>
+              <select id="nf-categoria">${opcoesCategoriaFato('captacao')}</select>
+            </div>
+            <div class="field">
               <label for="nf-titulo-editor">Título</label>
               ${corpoEditorRico('nf-titulo-editor', 'Descreva o fato…')}
             </div>
@@ -100,6 +104,7 @@
             method: 'POST',
             body: {
               unidade_id: document.getElementById('nf-unidade').value,
+              categoria: document.getElementById('nf-categoria').value,
               titulo: obterHtmlEditorRico('nf-titulo-editor'),
               descricao: document.getElementById('nf-descricao').value.trim() || undefined,
             },
@@ -121,6 +126,7 @@
       return `
         <tr>
           <td style="font-weight:500; max-width:320px">${tituloClampHtml(f.titulo, f.id)}</td>
+          <td class="cell-muted">${escapeHtml(rotuloCategoriaFato(f.categoria))}</td>
           <td class="cell-muted">${escapeHtml(f.unidade_nome)}</td>
           <td class="cell-muted">${escapeHtml(f.area_nome)}</td>
           <td class="cell-muted">${formatarData(f.data_identificacao)}</td>
@@ -150,7 +156,7 @@
           ? '<div class="empty-state">Nenhum fato encontrado com esses filtros.</div>'
           : `
             <table class="data-table">
-              <thead><tr><th>Título</th><th>Unidade</th><th>Área</th><th>Identificado em</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Título</th><th>Categoria</th><th>Unidade</th><th>Área</th><th>Identificado em</th><th>Status</th><th></th></tr></thead>
               <tbody>${fatos.map(linhaFato).join('')}</tbody>
             </table>
           `;

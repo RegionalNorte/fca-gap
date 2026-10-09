@@ -25,6 +25,12 @@ CREATE TYPE status_fato AS ENUM (
     'cancelado'
 );
 
+-- agrupa fatos por frente de trabalho — hoje só Captação; outras (ex:
+-- renovação, inadimplência) entram aqui conforme forem necessárias
+CREATE TYPE categoria_fato AS ENUM (
+    'captacao'
+);
+
 -- status_acao é 100% calculado a partir das datas (ver
 -- fn_calcular_status_acao) — nunca é definido manualmente:
 --   sem data_iniciada e sem data_finalizada  -> nao_iniciada
@@ -119,6 +125,7 @@ CREATE TABLE fatos (
     descricao           TEXT,
     data_identificacao  DATE NOT NULL DEFAULT CURRENT_DATE,
     status              status_fato NOT NULL DEFAULT 'aberto',
+    categoria           categoria_fato NOT NULL DEFAULT 'captacao',
     criado_por          UUID REFERENCES usuarios(id),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()

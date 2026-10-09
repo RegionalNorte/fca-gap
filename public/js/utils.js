@@ -13,6 +13,22 @@ const STATUS_FATO_LABEL = {
   cancelado: 'Cancelado',
 };
 
+// hoje só Captação — outras categorias (renovação, inadimplência etc.)
+// entram aqui conforme forem necessárias, junto com categoria_fato no banco
+const CATEGORIA_FATO_LABEL = {
+  captacao: 'Captação',
+};
+
+function rotuloCategoriaFato(categoria) {
+  return CATEGORIA_FATO_LABEL[categoria] || categoria;
+}
+
+function opcoesCategoriaFato(selecionada) {
+  return Object.entries(CATEGORIA_FATO_LABEL)
+    .map(([valor, rotulo]) => `<option value="${valor}" ${valor === selecionada ? 'selected' : ''}>${rotulo}</option>`)
+    .join('');
+}
+
 function statusAcaoHtml(status) {
   const label = STATUS_ACAO_LABEL[status] || status;
   return `<span class="status status--${status}">${label}</span>`;

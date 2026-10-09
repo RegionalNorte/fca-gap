@@ -54,7 +54,7 @@ const listar = asyncHandler(async (req, res) => {
 
   const { rows } = await pool.query(
     `SELECT
-       f.id, f.titulo, f.descricao, f.data_identificacao, f.status,
+       f.id, f.titulo, f.descricao, f.data_identificacao, f.status, f.categoria,
        f.created_at, f.updated_at,
        vp.unidade_id, vp.unidade_nome, vp.area_id, vp.area_nome, vp.regional_id, vp.regional_nome,
        vp.total_acoes, vp.acoes_concluidas, vp.acoes_adiantadas, vp.acoes_concluidas_com_atraso,
@@ -152,11 +152,20 @@ const buscarPorId = asyncHandler(async (req, res) => {
   res.json(fato);
 });
 
+// hoje só 'captacao' existe (ver categoria_fato no schema) — lista
+// mantida em código só pra validar o valor recebido com uma mensagem
+// clara, em vez de deixar a constraint do banco estourar um erro cru
+const CATEGORIAS_FATO = ['captacao'];
+
 const criar = asyncHandler(async (req, res) => {
-  const { unidade_id, titulo, descricao, data_identificacao } = req.body;
+  const { unidade_id, titulo, descricao, data_identificacao, categoria } = req.body;
 
   if (!unidade_id || !titulo) {
     throw new AppError('Informe unidade_id e titulo', 400);
+  }
+
+  if (categoria && !CATEGORIAS_FATO.includes(categoria)) {
+    throw new AppError('Categoria inválida', 400);
   }
 
   const tituloSeguro = sanitizarTextoRico(titulo);
@@ -169,10 +178,10 @@ const criar = asyncHandler(async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    `INSERT INTO fatos (unidade_id, titulo, descricao, data_identificacao, criado_por)
-     VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5)
+    `INSERT INTO fatos (unidade_id, titulo, descricao, data_identificacao, categoria, criado_por)
+     VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), COALESCE($5, 'captacao'::categoria_fato), $6)
      RETURNING *`,
-    [unidade_id, tituloSeguro, descricao || null, data_identificacao || null, req.usuario.id]
+    [unidade_id, tituloSeguro, descricao || null, data_identificacao || null, categoria || null, req.usuario.id]
   );
 
   res.status(201).json(rows[0]);
@@ -182,10 +191,13 @@ const criar = asyncHandler(async (req, res) => {
 // recomputado explicitamente com status: 'reabrir' (reverte um cancelamento
 // recalculando a partir das ações, igual à trigger do banco faria).
 const atualizar = asyncHandler(async (req, res) => {
-  const { titulo, descricao, data_identificacao, status } = req.body;
+  const { titulo, descricao, data_identificacao, status, categoria } = req.body;
   const tituloSeguro = titulo ? sanitizarTextoRico(titulo) : null;
   if (tituloSeguro && tituloSeguro.length > LIMITE_HTML) {
     throw new AppError('Título muito longo', 400);
+  }
+  if (categoria && !CATEGORIAS_FATO.includes(categoria)) {
+    throw new AppError('Categoria inválida', 400);
   }
 
   const { rows: atual } = await pool.query('SELECT unidade_id FROM fatos WHERE id = $1', [req.params.id]);
@@ -218,11 +230,12 @@ const atualizar = asyncHandler(async (req, res) => {
          titulo = COALESCE($2, titulo),
          descricao = COALESCE($3, descricao),
          data_identificacao = COALESCE($4, data_identificacao),
+         categoria = COALESCE($5, categoria),
          status = calc.novo_status::status_fato
        FROM calc
        WHERE id = $1
        RETURNING fatos.*`,
-      [req.params.id, tituloSeguro, descricao ?? null, data_identificacao ?? null]
+      [req.params.id, tituloSeguro, descricao ?? null, data_identificacao ?? null, categoria || null]
     );
     if (!rows[0]) throw new AppError('Fato não encontrado', 404);
     return res.json(rows[0]);
@@ -233,10 +246,11 @@ const atualizar = asyncHandler(async (req, res) => {
        titulo = COALESCE($1, titulo),
        descricao = COALESCE($2, descricao),
        data_identificacao = COALESCE($3, data_identificacao),
-       status = COALESCE($4, status)
-     WHERE id = $5
+       status = COALESCE($4, status),
+       categoria = COALESCE($5, categoria)
+     WHERE id = $6
      RETURNING *`,
-    [tituloSeguro, descricao ?? null, data_identificacao ?? null, status || null, req.params.id]
+    [tituloSeguro, descricao ?? null, data_identificacao ?? null, status || null, categoria || null, req.params.id]
   );
 
   if (!rows[0]) throw new AppError('Fato não encontrado', 404);
