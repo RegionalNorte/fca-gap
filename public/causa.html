@@ -24,17 +24,25 @@
       return n === null || n === undefined ? '' : ` (${n} dia${n === 1 ? '' : 's'})`;
     }
 
-    // "Data finalizada (real)" só libera depois que "Data iniciada (real)"
-    // tiver valor — mesma regra que o banco já exige (chk_acoes_datas_reais).
-    function ativarTravaDataFinalizada(idIniciada, idFinalizada) {
-      const iniciada = document.getElementById(idIniciada);
-      const finalizada = document.getElementById(idFinalizada);
+    // cada campo de data só libera depois que o anterior na sequência
+    // tiver valor: início previsto -> final previsto -> data iniciada
+    // (real) -> data finalizada (real) — essa última já era uma regra
+    // do próprio banco (chk_acoes_datas_reais), agora estendida pra
+    // cadeia toda só pra guiar o preenchimento na ordem certa.
+    function ativarTravaCampoData(idAnterior, idProximo) {
+      const anterior = document.getElementById(idAnterior);
+      const proximo = document.getElementById(idProximo);
       function atualizar() {
-        finalizada.disabled = !iniciada.value;
-        if (!iniciada.value) finalizada.value = '';
+        proximo.disabled = !anterior.value;
+        // dispara 'input' no campo que acabou de ser limpo, pra travar e
+        // limpar em cascata o resto da cadeia (não só o próximo campo)
+        if (!anterior.value && proximo.value) {
+          proximo.value = '';
+          proximo.dispatchEvent(new Event('input'));
+        }
       }
       atualizar();
-      iniciada.addEventListener('input', atualizar);
+      anterior.addEventListener('input', atualizar);
     }
 
     function textoUsuario(u) {
@@ -260,20 +268,20 @@
               </div>
               <div class="field">
                 <label for="modal-a-final">Final previsto</label>
-                <input type="date" id="modal-a-final" required />
+                <input type="date" id="modal-a-final" required disabled />
               </div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
               <div class="field">
                 <label for="modal-a-iniciada">Data iniciada (real)</label>
-                <input type="date" id="modal-a-iniciada" />
+                <input type="date" id="modal-a-iniciada" disabled />
               </div>
               <div class="field">
                 <label for="modal-a-finalizada">Data finalizada (real)</label>
                 <input type="date" id="modal-a-finalizada" disabled />
               </div>
             </div>
-            <p class="hint">Preencha as datas reais só se a ação já aconteceu — útil pra registrar algo que já foi feito.</p>
+            <p class="hint">Preencha os campos em ordem — cada data libera a próxima. As datas reais são opcionais, só pra quando a ação já tiver acontecido.</p>
             <div class="field">
               <label for="modal-a-evidencia">Evidência</label>
               <textarea id="modal-a-evidencia"></textarea>
@@ -294,7 +302,9 @@
       });
 
       ativarEditorRico('modal-a-descricao-editor');
-      ativarTravaDataFinalizada('modal-a-iniciada', 'modal-a-finalizada');
+      ativarTravaCampoData('modal-a-inicio', 'modal-a-final');
+      ativarTravaCampoData('modal-a-final', 'modal-a-iniciada');
+      ativarTravaCampoData('modal-a-iniciada', 'modal-a-finalizada');
       document.getElementById('modal-a-cancelar').addEventListener('click', fecharModal);
 
       ativarBuscaChecklist('modal-a');
@@ -397,7 +407,9 @@
 
       ativarEditorRico('modal-a-descricao-editor');
       definirHtmlEditorRico('modal-a-descricao-editor', a.descricao);
-      ativarTravaDataFinalizada('modal-a-iniciada', 'modal-a-finalizada');
+      ativarTravaCampoData('modal-a-inicio', 'modal-a-final');
+      ativarTravaCampoData('modal-a-final', 'modal-a-iniciada');
+      ativarTravaCampoData('modal-a-iniciada', 'modal-a-finalizada');
       document.getElementById('modal-a-cancelar').addEventListener('click', fecharModal);
 
       if (podeGerir) {
