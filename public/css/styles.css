@@ -427,6 +427,53 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 
 .alerta-vencido { font-size: 12px; font-weight: 500; color: var(--warning); }
 
+/* ---------- editor de texto rico (título do fato) ---------- */
+
+.editor-rico-toolbar { display: flex; gap: 7px; margin-bottom: 7px; }
+
+.editor-rico-cor {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  outline: 1px solid var(--border);
+  padding: 0;
+  cursor: pointer;
+}
+
+.editor-rico-cor:hover { outline-color: var(--accent); }
+
+.editor-rico {
+  min-height: 72px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  outline: none;
+}
+
+.editor-rico:focus { border-color: var(--accent); }
+
+.editor-rico:empty::before {
+  content: attr(data-placeholder);
+  color: var(--faint);
+}
+
+.titulo-rico-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.titulo-ver-mais { margin-top: 2px; font-size: 12px; }
+
+.titulo-modal-conteudo { font-size: 15px; line-height: 1.55; }
+
 /* ---------- panels / tables ---------- */
 
 .panel {

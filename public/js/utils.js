@@ -121,3 +121,110 @@ function fecharModal() {
   if (backdrop) backdrop.remove();
   document.removeEventListener('keydown', fecharModalNoEsc);
 }
+
+// Editor de texto rico (hoje só pro título do fato): cor + quebra de
+// linha. Gera só <span style="color:#HEX"> e <br> — nada mais — pra
+// bater exatamente com o que o sanitizador do servidor aceita
+// (src/utils/richText.js). Sanitiza de novo aqui só por UX (feedback
+// imediato se algo escapar do textoFormatadoHtml); a barreira de
+// segurança real é sempre a do servidor.
+const PALETA_EDITOR_RICO = [
+  { nome: 'Padrão', cor: '#18181b' },
+  { nome: 'Vermelho', cor: '#b91c1c' },
+  { nome: 'Laranja', cor: '#b45309' },
+  { nome: 'Verde', cor: '#15803d' },
+  { nome: 'Azul', cor: '#1d4ed8' },
+];
+
+function corpoEditorRico(id, placeholder = '') {
+  return `
+    <div class="editor-rico-toolbar">
+      ${PALETA_EDITOR_RICO.map(
+        (p) => `<button type="button" class="editor-rico-cor" data-cor="${p.cor}" data-for="${id}" title="${escapeHtml(p.nome)}" style="background:${p.cor}"></button>`
+      ).join('')}
+    </div>
+    <div id="${id}" class="editor-rico" contenteditable="true" data-placeholder="${escapeHtml(placeholder)}"></div>
+  `;
+}
+
+function aplicarCorEditorRico(editorEl, cor) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount || sel.isCollapsed) {
+    mostrarToast('Selecione o texto que quer colorir.', 'erro');
+    return;
+  }
+  const range = sel.getRangeAt(0);
+  if (!editorEl.contains(range.commonAncestorContainer)) return;
+
+  const span = document.createElement('span');
+  span.style.color = cor;
+  try {
+    range.surroundContents(span);
+  } catch {
+    const conteudo = range.extractContents();
+    span.appendChild(conteudo);
+    range.insertNode(span);
+  }
+  sel.removeAllRanges();
+}
+
+// Ativa quebra de linha no Enter (<br>, não <div>) + força colar como
+// texto puro (sem trazer HTML/estilo de fora) + liga os botões de cor
+// da toolbar correspondente.
+function ativarEditorRico(id) {
+  const editor = document.getElementById(id);
+  if (!editor) return;
+
+  editor.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    document.execCommand('insertLineBreak');
+  });
+
+  editor.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const texto = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, texto);
+  });
+
+  document.querySelectorAll(`.editor-rico-cor[data-for="${id}"]`).forEach((btn) => {
+    btn.addEventListener('click', () => aplicarCorEditorRico(editor, btn.dataset.cor));
+  });
+}
+
+function obterHtmlEditorRico(id) {
+  return document.getElementById(id).innerHTML.trim();
+}
+
+function textoPlanoEditorRico(id) {
+  return document.getElementById(id).textContent.trim();
+}
+
+function definirHtmlEditorRico(id, html) {
+  document.getElementById(id).innerHTML = html || '';
+}
+
+// Célula de título com clamp de 3 linhas + "Ver mais" (só aparece se o
+// texto realmente passar de 3 linhas) que abre um modal com o título
+// completo formatado. `html` já vem sanitizado pelo servidor.
+function tituloClampHtml(html, id) {
+  return `
+    <div>
+      <div class="titulo-rico-clamp" id="titulo-clamp-${id}">${html || ''}</div>
+      <button type="button" class="link-action titulo-ver-mais" id="titulo-vermais-${id}" style="display:none">Ver mais</button>
+    </div>
+  `;
+}
+
+function ativarTituloVerMais(id, htmlCompleto) {
+  const clamp = document.getElementById(`titulo-clamp-${id}`);
+  const btn = document.getElementById(`titulo-vermais-${id}`);
+  if (!clamp || !btn) return;
+
+  if (clamp.scrollHeight > clamp.clientHeight + 1) {
+    btn.style.display = 'inline';
+  }
+  btn.addEventListener('click', () => {
+    abrirModal({ titulo: 'Título completo', corpo: `<div class="titulo-modal-conteudo">${htmlCompleto}</div>` });
+  });
+}

@@ -2,6 +2,7 @@ const pool = require('../db/pool');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { condicaoUnidade, unidadeNoEscopo } = require('../services/escopo');
+const { sanitizarTextoRico, LIMITE_HTML } = require('../utils/richText');
 
 // colaborador vê só os fatos onde é responsável de alguma causa ou ação;
 // os demais papéis veem pela hierarquia de unidade (ver SPEC.md).
@@ -158,6 +159,11 @@ const criar = asyncHandler(async (req, res) => {
     throw new AppError('Informe unidade_id e titulo', 400);
   }
 
+  const tituloSeguro = sanitizarTextoRico(titulo);
+  if (tituloSeguro.length > LIMITE_HTML) {
+    throw new AppError('Título muito longo', 400);
+  }
+
   if (!(await unidadeNoEscopo(req.usuario, unidade_id))) {
     throw new AppError('Você não pode criar um fato fora da sua unidade/área/regional', 403);
   }
@@ -166,7 +172,7 @@ const criar = asyncHandler(async (req, res) => {
     `INSERT INTO fatos (unidade_id, titulo, descricao, data_identificacao, criado_por)
      VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5)
      RETURNING *`,
-    [unidade_id, titulo, descricao || null, data_identificacao || null, req.usuario.id]
+    [unidade_id, tituloSeguro, descricao || null, data_identificacao || null, req.usuario.id]
   );
 
   res.status(201).json(rows[0]);
@@ -177,6 +183,10 @@ const criar = asyncHandler(async (req, res) => {
 // recalculando a partir das ações, igual à trigger do banco faria).
 const atualizar = asyncHandler(async (req, res) => {
   const { titulo, descricao, data_identificacao, status } = req.body;
+  const tituloSeguro = titulo ? sanitizarTextoRico(titulo) : null;
+  if (tituloSeguro && tituloSeguro.length > LIMITE_HTML) {
+    throw new AppError('Título muito longo', 400);
+  }
 
   const { rows: atual } = await pool.query('SELECT unidade_id FROM fatos WHERE id = $1', [req.params.id]);
   if (!atual[0]) throw new AppError('Fato não encontrado', 404);
@@ -212,7 +222,7 @@ const atualizar = asyncHandler(async (req, res) => {
        FROM calc
        WHERE id = $1
        RETURNING fatos.*`,
-      [req.params.id, titulo ?? null, descricao ?? null, data_identificacao ?? null]
+      [req.params.id, tituloSeguro, descricao ?? null, data_identificacao ?? null]
     );
     if (!rows[0]) throw new AppError('Fato não encontrado', 404);
     return res.json(rows[0]);
@@ -226,7 +236,7 @@ const atualizar = asyncHandler(async (req, res) => {
        status = COALESCE($4, status)
      WHERE id = $5
      RETURNING *`,
-    [titulo ?? null, descricao ?? null, data_identificacao ?? null, status || null, req.params.id]
+    [tituloSeguro, descricao ?? null, data_identificacao ?? null, status || null, req.params.id]
   );
 
   if (!rows[0]) throw new AppError('Fato não encontrado', 404);

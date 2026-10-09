@@ -112,7 +112,10 @@ CREATE UNIQUE INDEX idx_usuarios_convite_token ON usuarios(convite_token) WHERE 
 CREATE TABLE fatos (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     unidade_id          UUID NOT NULL REFERENCES unidades(id),
-    titulo              VARCHAR(200) NOT NULL,
+    -- TEXT (não VARCHAR) porque guarda HTML sanitizado (cor + <br>) do
+    -- editor de texto rico do título, não só texto puro — ver
+    -- src/utils/richText.js
+    titulo              TEXT NOT NULL,
     descricao           TEXT,
     data_identificacao  DATE NOT NULL DEFAULT CURRENT_DATE,
     status              status_fato NOT NULL DEFAULT 'aberto',

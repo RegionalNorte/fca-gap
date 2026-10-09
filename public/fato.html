@@ -644,7 +644,7 @@
         const f = await api(`/fatos/${fatoId}`);
         fatoCarregado = f;
 
-        document.querySelector('.topbar h1').textContent = f.titulo;
+        document.querySelector('.topbar h1').innerHTML = f.titulo;
         document.querySelector('.topbar-breadcrumb').innerHTML =
           ['Regional Norte', escapeHtml(f.area_nome), escapeHtml(f.unidade_nome)].join(' <span class="sep">/</span> ');
         document.querySelector('.topbar-actions').innerHTML = acoesStatusFato(f);

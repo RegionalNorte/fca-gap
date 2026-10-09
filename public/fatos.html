@@ -64,8 +64,8 @@
               <select id="nf-unidade" required><option value="">Selecione…</option>${options}</select>
             </div>
             <div class="field">
-              <label for="nf-titulo">Título</label>
-              <input type="text" id="nf-titulo" required maxlength="200" />
+              <label for="nf-titulo-editor">Título</label>
+              ${corpoEditorRico('nf-titulo-editor', 'Descreva o fato…')}
             </div>
             <div class="field">
               <label for="nf-descricao">Descrição</label>
@@ -79,16 +79,28 @@
         `,
       });
 
+      ativarEditorRico('nf-titulo-editor');
       document.getElementById('btn-cancelar-novo-fato').addEventListener('click', fecharModal);
 
       document.getElementById('form-novo-fato').addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        const tituloTexto = textoPlanoEditorRico('nf-titulo-editor');
+        if (!tituloTexto) {
+          mostrarToast('Informe o título.', 'erro');
+          return;
+        }
+        if (tituloTexto.length > 300) {
+          mostrarToast('Título muito longo (máx. 300 caracteres).', 'erro');
+          return;
+        }
+
         try {
           const fato = await api('/fatos', {
             method: 'POST',
             body: {
               unidade_id: document.getElementById('nf-unidade').value,
-              titulo: document.getElementById('nf-titulo').value.trim(),
+              titulo: obterHtmlEditorRico('nf-titulo-editor'),
               descricao: document.getElementById('nf-descricao').value.trim() || undefined,
             },
           });
@@ -108,7 +120,7 @@
     function linhaFato(f) {
       return `
         <tr>
-          <td style="font-weight:500">${escapeHtml(f.titulo)}</td>
+          <td style="font-weight:500; max-width:320px">${tituloClampHtml(f.titulo, f.id)}</td>
           <td class="cell-muted">${escapeHtml(f.unidade_nome)}</td>
           <td class="cell-muted">${escapeHtml(f.area_nome)}</td>
           <td class="cell-muted">${formatarData(f.data_identificacao)}</td>
@@ -142,6 +154,7 @@
               <tbody>${fatos.map(linhaFato).join('')}</tbody>
             </table>
           `;
+        requestAnimationFrame(() => fatos.forEach((f) => ativarTituloVerMais(f.id, f.titulo)));
       } catch (err) {
         painel.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
       }
