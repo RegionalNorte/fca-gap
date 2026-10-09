@@ -686,7 +686,19 @@
       }
     }
 
-    carregar();
+    // vindo da tela de Prazos (?abrir_acao=ID): depois de carregar o fato,
+    // já abre essa ação direto no modal de editar, em vez de deixar a
+    // pessoa procurando ela na lista de causas
+    async function iniciar() {
+      await carregar();
+      const abrirAcaoId = qs('abrir_acao');
+      if (abrirAcaoId && fatoCarregado) {
+        const causa = fatoCarregado.causas.find((c) => c.acoes.some((a) => a.id === abrirAcaoId));
+        if (causa) abrirEditarAcaoModal(abrirAcaoId, causa.id);
+      }
+    }
+
+    iniciar();
   </script>
 </body>
 </html>
