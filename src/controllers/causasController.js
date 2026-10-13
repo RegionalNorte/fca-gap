@@ -39,8 +39,10 @@ const buscarPorId = asyncHandler(async (req, res) => {
   const causa = rows[0];
   if (!causa) throw new AppError('Causa não encontrada', 404);
 
+  const ehResponsavelPelaCausa = causa.responsavel_id === req.usuario.id;
+
   if (req.usuario.papel === 'colaborador') {
-    let temAcesso = causa.responsavel_id === req.usuario.id;
+    let temAcesso = ehResponsavelPelaCausa;
     if (!temAcesso) {
       const { rows: acesso } = await pool.query(
         `SELECT 1 FROM acoes a JOIN acoes_responsaveis res ON res.acao_id = a.id
@@ -71,7 +73,15 @@ const buscarPorId = asyncHandler(async (req, res) => {
     [causa.id]
   );
 
-  res.json({ ...causa, acoes });
+  // colaborador que só é responsável por ações específicas (não pela
+  // causa toda) só vê essas ações — igual já acontece em GET /fatos/:id.
+  // Quem é responsável pela causa continua vendo todas, já que acompanha
+  // o plano inteiro dela.
+  const acoesVisiveis = (req.usuario.papel === 'colaborador' && !ehResponsavelPelaCausa)
+    ? acoes.filter((a) => (a.responsaveis_ids || []).includes(req.usuario.id))
+    : acoes;
+
+  res.json({ ...causa, acoes: acoesVisiveis });
 });
 
 const criar = asyncHandler(async (req, res) => {
