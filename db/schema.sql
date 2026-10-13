@@ -168,6 +168,8 @@ CREATE TABLE acoes (
     data_finalizada  DATE,
     status           status_acao NOT NULL DEFAULT 'nao_iniciada',
     evidencia        TEXT,
+    gera_custo_financeiro  BOOLEAN NOT NULL DEFAULT false,
+    valor_custo_estimado   NUMERIC(14,2),
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     dias_previsto    INTEGER GENERATED ALWAYS AS (final_previsto - inicio_previsto) STORED,
@@ -176,6 +178,12 @@ CREATE TABLE acoes (
     CONSTRAINT chk_acoes_datas_reais CHECK (
         data_finalizada IS NULL
         OR (data_iniciada IS NOT NULL AND data_finalizada >= data_iniciada)
+    ),
+    -- quando não gera custo, o valor fica vazio; quando gera, o valor é
+    -- obrigatório (é a estimativa aproximada do quanto a ação vai custar)
+    CONSTRAINT chk_acoes_custo CHECK (
+        (gera_custo_financeiro = false AND valor_custo_estimado IS NULL)
+        OR (gera_custo_financeiro = true AND valor_custo_estimado IS NOT NULL AND valor_custo_estimado >= 0)
     )
 );
 

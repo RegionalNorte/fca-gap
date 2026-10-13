@@ -63,6 +63,11 @@ function formatarData(iso) {
   return `${dia}/${mes}/${ano}`;
 }
 
+function formatarMoeda(valor) {
+  if (valor === null || valor === undefined || valor === '') return '—';
+  return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 function iniciais(nome) {
   if (!nome) return '?';
   const partes = nome.trim().split(/\s+/);

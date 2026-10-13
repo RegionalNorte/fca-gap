@@ -107,8 +107,22 @@ const buscarPorId = asyncHandler(async (req, res) => {
   res.json(acao);
 });
 
+// gera_custo_financeiro=true exige valor_custo_estimado preenchido (>= 0);
+// gera_custo_financeiro=false sempre zera o valor, mesmo que algo tenha
+// vindo no corpo — mesma regra da constraint chk_acoes_custo do banco
+function validarCusto({ geraCusto, valor }) {
+  if (!geraCusto) return null;
+  const numero = Number(valor);
+  if (valor === undefined || valor === null || valor === '' || Number.isNaN(numero) || numero < 0) {
+    throw new AppError('Informe o valor estimado do custo', 400);
+  }
+  return numero;
+}
+
 const criar = asyncHandler(async (req, res) => {
   const { causa_id, descricao, inicio_previsto, final_previsto, data_iniciada, data_finalizada, evidencia, responsaveis } = req.body;
+  const geraCusto = Boolean(req.body.gera_custo_financeiro);
+  const valorCusto = validarCusto({ geraCusto, valor: req.body.valor_custo_estimado });
 
   if (!causa_id || !descricao || !inicio_previsto || !final_previsto) {
     throw new AppError('Informe causa_id, descricao, inicio_previsto e final_previsto', 400);
@@ -138,10 +152,10 @@ const criar = asyncHandler(async (req, res) => {
     await client.query('BEGIN');
 
     const { rows } = await client.query(
-      `INSERT INTO acoes (causa_id, descricao, inicio_previsto, final_previsto, data_iniciada, data_finalizada, evidencia)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO acoes (causa_id, descricao, inicio_previsto, final_previsto, data_iniciada, data_finalizada, evidencia, gera_custo_financeiro, valor_custo_estimado)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id`,
-      [causa_id, descricaoSegura, inicio_previsto, final_previsto, data_iniciada || null, data_finalizada || null, evidencia || null]
+      [causa_id, descricaoSegura, inicio_previsto, final_previsto, data_iniciada || null, data_finalizada || null, evidencia || null, geraCusto, valorCusto]
     );
 
     await substituirResponsaveis(client, rows[0].id, responsaveis);
@@ -204,6 +218,23 @@ const atualizar = asyncHandler(async (req, res) => {
         campos.push(`${chave} = $${campos.length + 1}`);
         valores.push(req.body[chave]);
       }
+    }
+
+    // gera_custo_financeiro e valor_custo_estimado são validados juntos
+    // (mesma regra da constraint chk_acoes_custo); se só um dos dois vier
+    // no corpo, completa com o valor atual do outro pra validar certo
+    if (req.body.gera_custo_financeiro !== undefined || req.body.valor_custo_estimado !== undefined) {
+      let geraCusto = req.body.gera_custo_financeiro;
+      if (geraCusto === undefined) {
+        const { rows: atualCusto } = await client.query('SELECT gera_custo_financeiro FROM acoes WHERE id = $1', [req.params.id]);
+        geraCusto = atualCusto[0] ? atualCusto[0].gera_custo_financeiro : false;
+      }
+      geraCusto = Boolean(geraCusto);
+      const valorCusto = validarCusto({ geraCusto, valor: req.body.valor_custo_estimado });
+      campos.push(`gera_custo_financeiro = $${campos.length + 1}`);
+      valores.push(geraCusto);
+      campos.push(`valor_custo_estimado = $${campos.length + 1}`);
+      valores.push(valorCusto);
     }
 
     let rows;

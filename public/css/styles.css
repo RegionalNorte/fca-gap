@@ -916,6 +916,16 @@ table.data-table a.row-link:hover { color: var(--accent); }
   padding: 5px 10px;
 }
 
+.acao-card-custo {
+  width: fit-content;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--status-em-andamento-fg);
+  background: var(--status-em-andamento-bg);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+}
+
 /* ~5 usuários visíveis antes de rolar — com poucos cabe tudo, com muitos
    não deixa a caixa (e o modal) crescer sem parar */
 .checklist { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; max-height: 158px; overflow: auto; }

@@ -61,6 +61,34 @@
       `;
     }
 
+    // mostra/exige o valor estimado só quando a ação realmente gera
+    // custo — enquanto desmarcado o campo fica escondido e esvaziado,
+    // igual a trava de datas acima
+    function ativarToggleCusto() {
+      const checkbox = document.getElementById('modal-a-gera-custo');
+      const wrap = document.getElementById('modal-a-valor-custo-wrap');
+      const campoValor = document.getElementById('modal-a-valor-custo');
+      function atualizar() {
+        wrap.style.display = checkbox.checked ? '' : 'none';
+        campoValor.required = checkbox.checked;
+        if (!checkbox.checked) campoValor.value = '';
+      }
+      checkbox.addEventListener('change', atualizar);
+      atualizar();
+    }
+
+    function corpoCampoCusto(geraCusto, valor) {
+      return `
+        <div class="field">
+          <label><input type="checkbox" id="modal-a-gera-custo" ${geraCusto ? 'checked' : ''} /> Gera custo financeiro</label>
+        </div>
+        <div class="field" id="modal-a-valor-custo-wrap">
+          <label for="modal-a-valor-custo">Valor estimado (R$)</label>
+          <input type="number" id="modal-a-valor-custo" min="0" step="0.01" value="${valor === null || valor === undefined ? '' : valor}" />
+        </div>
+      `;
+    }
+
     function ativarBuscaChecklist(prefixo) {
       const busca = document.getElementById(`${prefixo}-busca`);
       if (!busca) return;
@@ -85,6 +113,7 @@
         <div class="acao-card">
           <div class="descricao">${tituloClampHtml(a.descricao, a.id)}</div>
           ${vencida ? '<div class="acao-card-alerta">Prazo vencido sem conclusão</div>' : ''}
+          ${a.gera_custo_financeiro ? `<div class="acao-card-custo">Custo estimado: ${formatarMoeda(a.valor_custo_estimado)}</div>` : ''}
           <div class="acao-card-datas">
             <div>
               <div class="rotulo">Previsto</div>
@@ -286,6 +315,7 @@
               <label for="modal-a-evidencia">Evidência</label>
               <textarea id="modal-a-evidencia"></textarea>
             </div>
+            ${corpoCampoCusto(false, null)}
             <div class="field">
               <label>Responsáveis</label>
               ${campoResponsaveis}
@@ -305,6 +335,7 @@
       ativarTravaCampoData('modal-a-inicio', 'modal-a-final');
       ativarTravaCampoData('modal-a-final', 'modal-a-iniciada');
       ativarTravaCampoData('modal-a-iniciada', 'modal-a-finalizada');
+      ativarToggleCusto();
       document.getElementById('modal-a-cancelar').addEventListener('click', fecharModal);
 
       ativarBuscaChecklist('modal-a');
@@ -320,6 +351,11 @@
           mostrarToast('Informe a descrição.', 'erro');
           return;
         }
+        const geraCusto = document.getElementById('modal-a-gera-custo').checked;
+        if (geraCusto && !document.getElementById('modal-a-valor-custo').value) {
+          mostrarToast('Informe o valor estimado do custo.', 'erro');
+          return;
+        }
         const body = {
           causa_id: causaId,
           descricao: obterHtmlEditorRico('modal-a-descricao-editor'),
@@ -328,6 +364,8 @@
           data_iniciada: document.getElementById('modal-a-iniciada').value || null,
           data_finalizada: document.getElementById('modal-a-finalizada').value || null,
           evidencia: document.getElementById('modal-a-evidencia').value.trim() || null,
+          gera_custo_financeiro: geraCusto,
+          valor_custo_estimado: geraCusto ? document.getElementById('modal-a-valor-custo').value : null,
           responsaveis: Array.from(document.querySelectorAll('#modal-form-acao .checklist input:checked')).map((el) => el.value),
         };
         try {
@@ -391,6 +429,7 @@
               <label for="modal-a-evidencia">Evidência</label>
               <textarea id="modal-a-evidencia">${a.evidencia ? escapeHtml(a.evidencia) : ''}</textarea>
             </div>
+            ${corpoCampoCusto(a.gera_custo_financeiro, a.valor_custo_estimado)}
             <div class="field">
               <label>Responsáveis</label>
               ${campoResponsaveis}
@@ -410,6 +449,7 @@
       ativarTravaCampoData('modal-a-inicio', 'modal-a-final');
       ativarTravaCampoData('modal-a-final', 'modal-a-iniciada');
       ativarTravaCampoData('modal-a-iniciada', 'modal-a-finalizada');
+      ativarToggleCusto();
       document.getElementById('modal-a-cancelar').addEventListener('click', fecharModal);
 
       if (podeGerir) {
@@ -427,6 +467,11 @@
           mostrarToast('Informe a descrição.', 'erro');
           return;
         }
+        const geraCusto = document.getElementById('modal-a-gera-custo').checked;
+        if (geraCusto && !document.getElementById('modal-a-valor-custo').value) {
+          mostrarToast('Informe o valor estimado do custo.', 'erro');
+          return;
+        }
         const body = {
           descricao: obterHtmlEditorRico('modal-a-descricao-editor'),
           inicio_previsto: document.getElementById('modal-a-inicio').value,
@@ -434,6 +479,8 @@
           data_iniciada: document.getElementById('modal-a-iniciada').value || null,
           data_finalizada: document.getElementById('modal-a-finalizada').value || null,
           evidencia: document.getElementById('modal-a-evidencia').value.trim() || null,
+          gera_custo_financeiro: geraCusto,
+          valor_custo_estimado: geraCusto ? document.getElementById('modal-a-valor-custo').value : null,
         };
         if (podeGerir) {
           body.responsaveis = Array.from(document.querySelectorAll('#modal-form-acao .checklist input:checked')).map((el) => el.value);
