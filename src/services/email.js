@@ -1,22 +1,29 @@
 const nodemailer = require('nodemailer');
 
-// Gmail por enquanto (fase local/teste); trocar pra Resend/SES na migração
-// pra produção mantendo a mesma assinatura das funções abaixo. Se as
-// variáveis não estiverem configuradas, cai pro modo antigo (só console),
-// pra não quebrar o fluxo de convite em ambientes sem e-mail configurado.
+// Brevo (ex-Sendinblue) SMTP relay — provedor transacional de verdade,
+// trocado do Gmail depois que uma conta Gmail dedicada a isso foi
+// suspensa pelo Google por parecer bot (risco inerente de usar Gmail
+// pessoal pra SMTP automatizado de servidor). Se as variáveis não
+// estiverem configuradas, cai pro modo antigo (só console), pra não
+// quebrar o fluxo de convite em ambientes sem e-mail configurado.
 const configurado = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
 
 const transporter = configurado
   ? nodemailer.createTransport({
-      host: 'smtp.gmail.com',
+      host: 'smtp-relay.brevo.com',
       port: 465,
       secure: true,
       auth: {
-        user: process.env.EMAIL_USER,
+        user: process.env.EMAIL_USER, // "Login" do SMTP Brevo — não é um e-mail de verdade
         pass: process.env.EMAIL_PASS,
       },
     })
   : null;
+
+// endereço que aparece como remetente — precisa ser um e-mail
+// verificado no Brevo (Settings > Remetentes), diferente do
+// EMAIL_USER acima (que é só a credencial de login do SMTP)
+const remetente = process.env.EMAIL_FROM || process.env.EMAIL_USER;
 
 const baseUrl = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
 
@@ -35,7 +42,7 @@ async function enviar({ para, assunto, texto, html }) {
 
   try {
     await transporter.sendMail({
-      from: `"FCA GAP" <${process.env.EMAIL_USER}>`,
+      from: `"FCA GAP" <${remetente}>`,
       to: para,
       subject: assunto,
       text: texto,
