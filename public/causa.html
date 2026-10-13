@@ -61,15 +61,17 @@
       `;
     }
 
-    // mostra/exige o valor estimado só quando a ação realmente gera
-    // custo — enquanto desmarcado o campo fica escondido e esvaziado,
-    // igual a trava de datas acima
+    // valor fica na mesma linha do switch sempre, mas só é exigido (e
+    // habilitado) quando a ação realmente gera custo — desmarcar trava
+    // e limpa o campo, igual a trava de datas acima. A classe no cartão
+    // acende o destaque azul da linha toda quando ativo.
     function ativarToggleCusto() {
       const checkbox = document.getElementById('modal-a-gera-custo');
-      const wrap = document.getElementById('modal-a-valor-custo-wrap');
+      const cartao = document.getElementById('modal-a-custo-cartao');
       const campoValor = document.getElementById('modal-a-valor-custo');
       function atualizar() {
-        wrap.style.display = checkbox.checked ? '' : 'none';
+        cartao.classList.toggle('campo-custo--ativo', checkbox.checked);
+        campoValor.disabled = !checkbox.checked;
         campoValor.required = checkbox.checked;
         if (!checkbox.checked) campoValor.value = '';
       }
@@ -79,12 +81,18 @@
 
     function corpoCampoCusto(geraCusto, valor) {
       return `
-        <div class="field">
-          <label><input type="checkbox" id="modal-a-gera-custo" ${geraCusto ? 'checked' : ''} /> Gera custo financeiro</label>
-        </div>
-        <div class="field" id="modal-a-valor-custo-wrap">
-          <label for="modal-a-valor-custo">Valor estimado (R$)</label>
-          <input type="number" id="modal-a-valor-custo" min="0" step="0.01" value="${valor === null || valor === undefined ? '' : valor}" />
+        <div class="campo-custo" id="modal-a-custo-cartao">
+          <label class="campo-custo-toggle">
+            <span class="toggle-switch">
+              <input type="checkbox" id="modal-a-gera-custo" ${geraCusto ? 'checked' : ''} />
+              <span class="toggle-switch-trilho"></span>
+            </span>
+            <span class="campo-custo-rotulo">Gera custo financeiro</span>
+          </label>
+          <div class="campo-custo-valor" id="modal-a-valor-custo-wrap">
+            <span class="campo-custo-prefixo">R$</span>
+            <input type="number" id="modal-a-valor-custo" min="0" step="0.01" placeholder="0,00" value="${valor === null || valor === undefined ? '' : valor}" />
+          </div>
         </div>
       `;
     }

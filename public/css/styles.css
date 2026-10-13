@@ -919,12 +919,123 @@ table.data-table a.row-link:hover { color: var(--accent); }
 .acao-card-custo {
   width: fit-content;
   font-size: 12.5px;
-  font-weight: 500;
-  color: var(--status-em-andamento-fg);
-  background: var(--status-em-andamento-bg);
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-tint);
   border-radius: var(--radius-sm);
   padding: 5px 10px;
 }
+
+/* campo de custo financeiro (criar/editar ação): switch + valor numa
+   linha só, dentro de um cartão que acende em azul institucional
+   quando ativo — pra não passar batido como um checkbox qualquer */
+.campo-custo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.campo-custo--ativo {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+}
+
+.campo-custo-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.campo-custo-rotulo { white-space: nowrap; }
+
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 21px;
+  flex: none;
+}
+
+.toggle-switch input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.toggle-switch-trilho {
+  position: absolute;
+  inset: 0;
+  background: #d4d4d8;
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+
+.toggle-switch-trilho::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.toggle-switch input:checked ~ .toggle-switch-trilho { background: var(--accent); }
+.toggle-switch input:checked ~ .toggle-switch-trilho::before { transform: translateX(15px); }
+.toggle-switch input:focus-visible ~ .toggle-switch-trilho { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.campo-custo-valor {
+  display: flex;
+  align-items: stretch;
+  margin-left: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.campo-custo-prefixo {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  border-right: 1px solid var(--border);
+}
+
+.campo-custo-valor input {
+  width: 120px;
+  border: none;
+  padding: 8px 12px;
+  font-size: 14px;
+  background: transparent;
+}
+
+.campo-custo-valor input:focus { outline: none; }
+
+.campo-custo-valor input:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+.campo-custo-valor:has(input:disabled) { background: var(--paper); }
 
 /* ~5 usuários visíveis antes de rolar — com poucos cabe tudo, com muitos
    não deixa a caixa (e o modal) crescer sem parar */
